@@ -1,0 +1,17 @@
+# environments
+.venv/
+__pycache__/
+*.pyc
+
+# large binaries — keep outside Git per the workflow plan
+*.ckpt
+*.pth
+*.pt
+
+# the source PDF is copyrighted; keep it local
+*.pdf
+
+# extracted figure rasters (regenerable from the PDF)
+step21_geometry/figures/native_*
+step21_geometry/figures/page*
+step21_geometry/figures/grid_*
