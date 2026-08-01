@@ -109,6 +109,84 @@ def mechanical_bc(segment):
             "pit_floor":    ("roller", dict(u=0.0))}.get(segment)
 
 
+
+# ============================ MECHANICAL BOUNDARY DATA =======================
+# Elastic constants, Hoek-Diederichs (2006):
+#   E_rm = E_i (0.02 + (1 - D/2)/(1 + exp((60 + 15D - GSI)/11))),  E_i = MR*sig_ci
+#   Mk    MR 400, sig_ci 17.9 MPa, GSI 50  ->  478 MPa    (Step 1.3)
+#   Mk_d  MR 400, sig_ci 4.29 MPa, GSI 45  ->  86.5 MPa   (Step 1.3)
+#   Tm    MR 500, sig_ci 70.0 MPa, GSI 60  ->  4264 MPa   DERIVED HERE --
+#         Step 1.3 predates the identification of Tm as basement limestone.
+#         MR 500 is Hoek's crystalline-limestone value; sig_ci 70 MPa is the
+#         same literature estimate as geometry.SIG_CI. Sensitivity, not fact.
+
+E_RM = {"Mk": 4.78e8, "Mk_d": 8.65e7, "Tm": 4.264e9}   # Pa
+NU   = {"Mk": 0.28,   "Mk_d": 0.30,   "Tm": 0.25}
+
+# K0 = nu/(1-nu). The roadmap's single 0.39 is the MARL value; Tm is 87% of
+# the domain by area and takes 0.333.
+K0   = {k: v / (1.0 - v) for k, v in NU.items()}
+
+G_ACC = 9.81
+
+FIXED         = ("base",)
+ROLLER_X      = ("far_field_f1", "pit_floor")
+TRACTION_FREE = ("natural_ground", "bench", "cut_face")
+
+
+def mechanical_bc(segment):
+    """(kind, constraints) for a segment. None means traction-free."""
+    if segment in FIXED:
+        return ("fixed", dict(u=0.0, v=0.0))
+    if segment in ROLLER_X:
+        return ("roller_x", dict(u=0.0))
+    if segment in TRACTION_FREE:
+        return None
+    raise ValueError("unknown segment: " + segment)
+
+
+def body_force(x, z):
+    """(N,2) body force rho(x,z)*g, downward. Zero outside the domain.
+    rho comes from material_tag, so the 1519/1723/2650 density contrast
+    enters the momentum residual automatically."""
+    tag = g.material_tag(x, z)
+    rho = np.zeros(np.shape(tag), float)
+    for k, v in g.RHO.items():
+        rho[tag == k] = v
+    return np.stack([np.zeros_like(rho), -rho * G_ACC], axis=-1)
+
+
+def traction_free_normals(segment, pts):
+    """Outward unit normals where sigma.n = 0 will be enforced."""
+    if segment not in TRACTION_FREE:
+        raise ValueError(segment + " is not traction-free")
+    return outward_normal(g.z_ground, pts[:, 0])
+
+
+def sigma_v_geostatic(x, z, n_layers=400):
+    """Vertical geostatic stress (Pa, compression positive), integrating
+    rho*g from the ground surface down to z."""
+    x = np.asarray(x, float); z = np.asarray(z, float)
+    top = g.z_ground(x)
+    t = np.linspace(0.0, 1.0, n_layers)[:, None]
+    zz = top[None, :] - t * (top - z)[None, :]
+    tag = g.material_tag(np.broadcast_to(x, zz.shape), zz)
+    rho = np.zeros(zz.shape)
+    for k, v in g.RHO.items():
+        rho[tag == k] = v
+    dz = (top - z) / (n_layers - 1)
+    return np.trapz(rho, dx=1.0, axis=0) * dz * G_ACC
+
+
+def sigma_h_geostatic(x, z):
+    """Horizontal geostatic stress, K0*sigma_v, K0 taken per unit."""
+    tag = g.material_tag(x, z)
+    k0 = np.zeros(np.shape(tag), float)
+    for k, v in K0.items():
+        k0[tag == k] = v
+    return k0 * sigma_v_geostatic(x, z)
+
+
 if __name__ == "__main__":
     for k, v in sample_boundaries().items():
         print("  %-16s %5d pts   x %6.1f-%6.1f   z %6.1f-%6.1f"
