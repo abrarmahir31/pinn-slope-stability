@@ -163,26 +163,19 @@ def traction_free_normals(segment, pts):
     return outward_normal(g.z_ground, pts[:, 0])
 
 
-def sigma_v_geostatic(x, z, n_layers=None):
-    """Vertical geostatic stress (Pa, compression positive).
-
-    Closed form, not quadrature. Every column is at most two layers because
-    the Mk/Mk_d divide is vertical, so a column is Mk-over-Tm or Mk_d-over-Tm,
-    never both. Exact to machine precision; the trapz version carried a few
-    hundred Pa of node-alignment jitter that varied with x.
-
-    n_layers is accepted and ignored, for signature compatibility.
-    """
-    x = np.asarray(x, float)
-    z = np.asarray(z, float)
+def sigma_v_geostatic(x, z, n_layers=400):
+    """Vertical geostatic stress (Pa, compression positive), integrating
+    rho*g from the ground surface down to z."""
+    x = np.asarray(x, float); z = np.asarray(z, float)
     top = g.z_ground(x)
-    # the contact pinches out at the toe; digitisation puts it ~0.14 m above
-    # ground at x = 0, which would otherwise integrate a negative thickness
-    ztm = np.minimum(g.z_tm_top(x), top)
-    rho_up = np.where(x < g.X_MK_DIVIDE, g.RHO["Mk"], g.RHO["Mk_d"])
-    h_up = np.clip(top - np.maximum(z, ztm), 0.0, None)   # marl above the point
-    h_tm = np.clip(ztm - z, 0.0, None)                    # Tm above the point
-    return G_ACC * (rho_up * h_up + g.RHO["Tm"] * h_tm)
+    t = np.linspace(0.0, 1.0, n_layers)[:, None]
+    zz = top[None, :] - t * (top - z)[None, :]
+    tag = g.material_tag(np.broadcast_to(x, zz.shape), zz)
+    rho = np.zeros(zz.shape)
+    for k, v in g.RHO.items():
+        rho[tag == k] = v
+    dz = (top - z) / (n_layers - 1)
+    return np.trapz(rho, dx=1.0, axis=0) * dz * G_ACC
 
 
 def sigma_h_geostatic(x, z):
