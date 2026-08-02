@@ -185,13 +185,29 @@ def sigma_v_geostatic(x, z, n_layers=None):
     return G_ACC * (rho_up * h_up + g.RHO["Tm"] * h_tm)
 
 
+K0_SMOOTH_W = 2.0   # m, half-width of the K0 transition across the contact
+
+
+def k0_field(x, z):
+    """Per-unit K0, linearly blended over +/-K0_SMOOTH_W about the Tm contact.
+
+    K0 is genuinely discontinuous there (sigma_v is continuous, sigma_h is not).
+    A tanh network cannot represent a jump, so the contact is smoothed over a
+    stated width. This is a numerical device applied to a quantity that is
+    already an idealisation -- record K0_SMOOTH_W in the decision log.
+    """
+    x = np.asarray(x, float); z = np.asarray(z, float)
+    top = g.z_ground(x)
+    ztm = np.minimum(g.z_tm_top(x), top)
+    k_up = np.where(x < g.X_MK_DIVIDE, K0["Mk"], K0["Mk_d"])
+    k_dn = K0["Tm"]
+    t = np.clip((z - (ztm - K0_SMOOTH_W)) / (2.0 * K0_SMOOTH_W), 0.0, 1.0)
+    return k_dn + (k_up - k_dn) * t
+
+
 def sigma_h_geostatic(x, z):
-    """Horizontal geostatic stress, K0*sigma_v, K0 taken per unit."""
-    tag = g.material_tag(x, z)
-    k0 = np.zeros(np.shape(tag), float)
-    for k, v in K0.items():
-        k0[tag == k] = v
-    return k0 * sigma_v_geostatic(x, z)
+    """Horizontal geostatic stress, K0*sigma_v, with K0 smoothed across contacts."""
+    return k0_field(x, z) * sigma_v_geostatic(x, z)
 
 
 if __name__ == "__main__":
