@@ -1,0 +1,8 @@
+stratum,tier,theta_r,theta_s,alpha_1per_m,alpha_1per_Pa,n,m,swcc_source,E_rm_MPa,E_rm_lo_MPa,E_rm_hi_MPa,E_Pa,nu,G_Pa,lambda_Pa
+Marl (Sekkoy Fm.),B: literature/analog,0.05,0.38,0.5,5.10E-05,1.2,0.1667,alpha per Carsel&Parrish(1988) silty-clay; th_s=0.9*n0; n raised 1.09->1.20 (see sheet),208.9,179.1,238.8,2.09E+08,0.28,8.16E+07,1.04E+08
+Weak-zone marl (Sekkoy Fm.),B: analog to marl,0.05,0.32,0.5,5.10E-05,1.2,0.1667,same family as marl; th_s=0.9*n0 with own porosity (n0=0.350),38.1,32.6,43.5,3.81E+07,0.3,1.46E+07,2.20E+07
+Tuffite (Yatagan Fm.),B: nonwelded-tuff analog,0.05,0.37,1,0.000101937,1.3,0.2308,analog to nonwelded tuff (Flint 2003 family); th_s=0.9*n0 (n0=0.413),32.3,18.5,37,3.24E+07,0.33,1.22E+07,2.36E+07
+Coal seam (lignite),B: fracture equivalent-continuum,0.02,0.15,2,0.000203874,1.8,0.4444,fracture porosity as effective th_s (Peters&Klavetter 1988 concept),93.4,62.3,124.6,9.34E+07,0.32,3.54E+07,6.29E+07
+Underclay (Turgut Fm.),A: Rosetta3 model 3,0.105,0.391,0.611,6.23E-05,1.345,0.2565,Rosetta3 SSC+BD_dry=1.544 g/cm3 (Zhang&Schaap 2017),15,10,25,1.50E+07,0.35,5.56E+06,1.30E+07
+Slope debris,A: Rosetta3 model 3,0.124,0.473,0.523,5.33E-05,1.36,0.2647,Rosetta3 SSC+BD_dry=1.347 g/cm3,8,5,15,8.00E+06,0.35,2.96E+06,6.91E+06
+Fault gouge [suppl.],A: Rosetta3 model 2,0.052,0.445,0.338,3.45E-05,1.706,0.4138,"SSC only (clay not reported, taken 0); discontinuity infill, not a stratum",,,,,,,

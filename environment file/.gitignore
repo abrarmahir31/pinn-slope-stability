@@ -1,0 +1,26 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# --- Environments / secrets ---
+.env
+.condarc              # never commit PyRosetta credentials
+env-with-pyrosetta.yml # local-only variant that may contain credentials
+.venv/
+venv/
+
+# --- Data & outputs (usually too big / not source) ---
+data/
+*.pdb
+*.silent
+*.log
+outputs/
+results/
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

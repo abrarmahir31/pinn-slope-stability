@@ -1,0 +1,1939 @@
+{
+  "schema": {
+    "name": "isikdere_phase1_dataset",
+    "version": "1.0.0",
+    "generated": "2026-07-29",
+    "description": "Single consolidated Phase-1 reference state for the coupled hydro-mechanical PINN slope-stability model of the Isikdere lignite open pit. All values strict SI. Supersedes phase1_reference_state.json and step_1_2_1_3_adopted_parameters.json, both of which contain values corrected here (see conflicts_resolved).",
+    "units": "m, s, Pa, kg/m^3, K in m/s, alpha in 1/m and 1/Pa, angles in degrees unless the key ends _rad",
+    "primary_source": "Ulusay, R., Ekmekci, M., Tuncay, E. & Hasancebi, N. (2014). Improvement of slope stability based on integrated geotechnical evaluations and hydrogeological conceptualisation at a lignite open pit. Engineering Geology 181, 261-280. DOI 10.1016/j.enggeo.2014.08.005",
+    "constants": {
+      "g_mps2": 9.81,
+      "rho_w_kgpm3": 1000.0,
+      "gamma_w_Npm3": 9810.0
+    }
+  },
+  "conflicts_resolved": [
+    {
+      "id": "C1",
+      "severity": "high",
+      "field": "E_rm (all rock strata)",
+      "sources_disagree": [
+        "Phase1_Reference_State.docx / phase1_reference_state.json: marl 478 MPa (MR=400)",
+        "Step_1_2_1_3 master sheet: marl 208.9 MPa (MR=175)"
+      ],
+      "resolution": "ADOPTED 208.9 MPa (MR = 175).",
+      "reason": "Hoek & Diederichs (2006) tabulate MR = 150-200 for marls. MR = 400 is twice the published upper bound. 478 MPa is retained as the upper sensitivity case only. Coal (93.4) and tuffite (32.3) agree between sources to rounding.",
+      "affects": [
+        "marl_sekkoy",
+        "marl_weakzone"
+      ]
+    },
+    {
+      "id": "C2",
+      "severity": "high",
+      "field": "seepage-face flux BC q1",
+      "sources_disagree": [
+        "Ulusay et al. text + Step 1.1 SI sheet: 0.056 m3/day/m = 6.48e-7 m3/s/m",
+        "Fig. 9 plotted curve: 0.56 m3/day/m = 6.48e-6 m3/s/m"
+      ],
+      "resolution": "ADOPTED 0.56 m3/day/m (6.481e-6 m3/s/m).",
+      "reason": "Summing q(t)=0.56/sqrt(t) over 30 days gives 5.368 m3/m, matching the paper's own published cumulative of 5.37 to 3 s.f. The 0.056 version gives 0.537 - ten times too small. The text carries a typographic error; the figure is right. This is a factor-of-ten error in a boundary condition - it would have invalidated every transient result.",
+      "affects": [
+        "boundary_conditions.seepage_face_flux"
+      ]
+    },
+    {
+      "id": "C3",
+      "severity": "medium",
+      "field": "van Genuchten SWCC (all strata)",
+      "sources_disagree": [
+        "Phase1_Reference_State.docx: roadmap placeholders (underclay 0.07/0.43/1.0/1.23)",
+        "Step_1_2_1_3 master sheet: Rosetta3-computed + porosity-tied analogs"
+      ],
+      "resolution": "ADOPTED the Step 1.2 table throughout.",
+      "reason": "Soils are now computed from site grain-size + dry bulk density with Rosetta3 (Tier A, with 1-sigma bands). Rock analogs are porosity-tied via theta_s = 0.9*n0 using each stratum's OWN porosity, which the placeholders did not do - the placeholder set gave the weak-zone marl and tuffite the same theta_s as the marl.",
+      "affects": [
+        "all strata"
+      ]
+    },
+    {
+      "id": "C4",
+      "severity": "medium",
+      "field": "initial porosity n0 (weak-zone marl, tuffite)",
+      "sources_disagree": [
+        "phase1_reference_state.json: weak-zone 0.427 (copied from marl), tuffite 0.400 (estimate)",
+        "phase relation from each stratum's own gamma and Gs: 0.350 and 0.413"
+      ],
+      "resolution": "ADOPTED 0.3499 (weak-zone marl) and 0.4128 (tuffite), recomputed from n0 = 1 - gamma_dry/(gamma_w*Gs).",
+      "reason": "Both strata have their own reported unit weight (16.9 and 14.4 kN/m3). There was no reason to inherit the marl's porosity or to estimate. n0 drives the Kozeny-Carman permeability feedback, so a 0.077 error in the weak zone - the stratum that actually fails - propagates straight into the coupled loop.",
+      "affects": [
+        "marl_weakzone",
+        "tuffite"
+      ]
+    },
+    {
+      "id": "C5",
+      "severity": "low",
+      "field": "Poisson's ratio, underclay",
+      "sources_disagree": [
+        "Phase1_Reference_State.docx: 0.40",
+        "Step_1_3 master sheet: 0.35"
+      ],
+      "resolution": "ADOPTED 0.35, sweep range 0.30-0.45.",
+      "reason": "Both are inside the literature band for stiff CL-CH clay. 0.35 is the value used in the sheet that actually derived the elastic tensor, so the Lame constants shipped here are self-consistent with it. Note K0 = nu/(1-nu) differs by 0.13 between the two, which matters for the geostatic initial condition in Step 2.3 - keep it in the Step 6.2 sweep.",
+      "affects": [
+        "underclay"
+      ]
+    },
+    {
+      "id": "C6",
+      "severity": "medium",
+      "field": "E_ref for non-dimensionalisation",
+      "sources_disagree": [
+        "nondim.py / Step_1_6 doc: 1e9 Pa",
+        "Step_1_2_1_3 sheet recommendation: ~1e8 Pa"
+      ],
+      "resolution": "ADOPTED 1e8 Pa; U_ref becomes 1.70 m (was 0.17 m).",
+      "reason": "No stratum in the model is as stiff as 1 GPa - the adopted moduli run 8e6 to 2.09e8 Pa. Scaling displacement by a modulus an order above the real material leaves u* far below O(1), which is the thing the exercise exists to prevent. ACTION: update nondim.py line E_ref: float = 1.0e9 -> 1.0e8.",
+      "affects": [
+        "nondim.py",
+        "Step_1_6_NonDimensionalisation.docx"
+      ]
+    },
+    {
+      "id": "C7",
+      "severity": "medium",
+      "field": "Fig. 8 axis assignment",
+      "sources_disagree": [
+        "figure as printed: Cv reads 6-8% for most wells",
+        "paper text: Cv below 5% in the great majority, never above 10%"
+      ],
+      "resolution": "Series are plotted against opposite axes to their titles. Blue bars = Cv on the right axis; red line = average head on the left. Corrected values shipped.",
+      "reason": "Read as corrected, the red line reproduces the Fig.7 average heads almost exactly (GK.10 = 112, GK.11 = 226) and Cv comes out 0.05-8.4%, matching the text.",
+      "affects": [
+        "validation.monitoring_wells"
+      ]
+    },
+    {
+      "id": "C8",
+      "severity": "medium",
+      "field": "Fig. 11 normal-stress labels",
+      "sources_disagree": [
+        "labels as printed: ascending sigma_n top-to-bottom",
+        "physics: shear strength must increase with normal stress"
+      ],
+      "resolution": "Mapping reversed - highest curve = 260 kPa. Corrected envelope shipped.",
+      "reason": "The corrected mapping gives phi_peak = 28.8 deg and phi_res = 15.1 deg, matching Table 3a row 1 (27.9 / 14.4) within a degree. The printed order implies phi_peak = 65 deg at 68 kPa, which is impossible.",
+      "affects": [
+        "validation.shear_envelope_digitised"
+      ]
+    },
+    {
+      "id": "C9",
+      "severity": "low",
+      "field": "Fig. 19e, 20-degree flattening",
+      "sources_disagree": [
+        "figure prints F = 1.250",
+        "text says flattening to 20 deg achieves F = 1.3"
+      ],
+      "resolution": "Benchmark against 1.250 at 20 deg. The 18-deg case (1.346) is the only one that actually clears 1.3.",
+      "affects": [
+        "validation.lem_factors_of_safety"
+      ]
+    },
+    {
+      "id": "C10",
+      "severity": "high",
+      "field": "coal-seam transmissivity vs storativity",
+      "sources_disagree": [
+        "packer tests: K = 0.1-0.5 m/day over the seam thickness",
+        "Fig. 10a curve fit: w = T/S = 1850 m2/day, which with S = 3e-5 gives T = 0.056 m2/day"
+      ],
+      "resolution": "UNRESOLVED - deliberately. Both values are carried in the dataset.",
+      "reason": "For any plausible seam thickness (1-30 m) the packer K implies T two orders above the fitted value. Either the plotted curves assume a much larger S or a much smaller K. This is a genuine ambiguity in the source, not a digitisation artefact. Pick one, justify it in the methodology, and show the other as a sensitivity case. Do not let the code pick silently.",
+      "affects": [
+        "coal.K_s_mps",
+        "boundary_conditions.drawdown_analytic"
+      ]
+    }
+  ],
+  "strata": {
+    "marl_sekkoy": {
+      "label": "Marl (Sekkoy Fm.)",
+      "figure_label": "Mk",
+      "kind": "rock",
+      "role": "Main overburden / aquitard",
+      "gamma_bulk_Npm3": 14900.0,
+      "gamma_bulk_range_kNpm3": [
+        14.8,
+        15.0
+      ],
+      "rho_bulk_kgpm3": 1518.9,
+      "rho_dry_kgpm3": 1518.9,
+      "rho_sat_kgpm3": 1945.7,
+      "w_natural": null,
+      "Gs": 2.65,
+      "Gs_source": "assumed (not reported)",
+      "n0": 0.4268,
+      "K_s_mps": 1e-09,
+      "K_s_range_mps": [
+        1e-10,
+        1e-08
+      ],
+      "K_s_basis": "~0 Lugeon, no water intake; numerical aquitard floor",
+      "vg_theta_r": 0.05,
+      "vg_theta_s": 0.38,
+      "vg_alpha_1pm": 0.5,
+      "vg_alpha_1pPa": 5.0968e-05,
+      "vg_n": 1.2,
+      "vg_m": 0.1667,
+      "vg_tier": "B",
+      "vg_basis": "Carsel & Parrish (1988) silty-clay alpha; theta_s = 0.9*n0; n raised 1.09->1.20 for autodiff smoothness",
+      "vg_sd": null,
+      "E_Pa": 208950000.0,
+      "E_lo_Pa": 179100000.0,
+      "E_hi_Pa": 238800000.0,
+      "E_i_Pa": 3132500000.0,
+      "MR": 175,
+      "MR_range": [
+        150,
+        200
+      ],
+      "HD_reduction_factor": 0.0667,
+      "nu": 0.28,
+      "nu_range": [
+        0.25,
+        0.345
+      ],
+      "G_Pa": 81621000.0,
+      "lambda_Pa": 103880000.0,
+      "K_bulk_Pa": 158290000.0,
+      "K0_at_rest": 0.3889,
+      "sigma_ci_Pa": 17900000.0,
+      "m_i": 4,
+      "GSI": 50,
+      "D": 1.0,
+      "m_b": 0.1125,
+      "s": 0.0002404,
+      "a": 0.5057,
+      "sand_silt_clay_pct": null,
+      "LL": null,
+      "PL": null,
+      "uscs": null
+    },
+    "marl_weakzone": {
+      "label": "Weak-zone marl (Sekkoy Fm.)",
+      "figure_label": "Mk_w",
+      "kind": "rock",
+      "role": "Weak northern-slope zone",
+      "gamma_bulk_Npm3": 16900.0,
+      "gamma_bulk_range_kNpm3": [
+        16.0,
+        17.8
+      ],
+      "rho_bulk_kgpm3": 1722.7,
+      "rho_dry_kgpm3": 1722.7,
+      "rho_sat_kgpm3": 2072.6,
+      "w_natural": null,
+      "Gs": 2.65,
+      "Gs_source": "assumed (not reported)",
+      "n0": 0.3499,
+      "K_s_mps": 1e-09,
+      "K_s_range_mps": [
+        1e-10,
+        1e-08
+      ],
+      "K_s_basis": "aquitard floor (same family as marl)",
+      "vg_theta_r": 0.05,
+      "vg_theta_s": 0.32,
+      "vg_alpha_1pm": 0.5,
+      "vg_alpha_1pPa": 5.0968e-05,
+      "vg_n": 1.2,
+      "vg_m": 0.1667,
+      "vg_tier": "B",
+      "vg_basis": "marl analog, identical alpha/n; theta_s = 0.9*n0 from its own porosity",
+      "vg_sd": null,
+      "E_Pa": 38057000.0,
+      "E_lo_Pa": 32620000.0,
+      "E_hi_Pa": 43493000.0,
+      "E_i_Pa": 750750000.0,
+      "MR": 175,
+      "MR_range": [
+        150,
+        200
+      ],
+      "HD_reduction_factor": 0.05069,
+      "nu": 0.3,
+      "nu_range": [
+        0.28,
+        0.358
+      ],
+      "G_Pa": 14637000.0,
+      "lambda_Pa": 21956000.0,
+      "K_bulk_Pa": 31714000.0,
+      "K0_at_rest": 0.4286,
+      "sigma_ci_Pa": 4290000.0,
+      "m_i": 3,
+      "GSI": 45,
+      "D": 1.0,
+      "m_b": 0.05902,
+      "s": 0.0001045,
+      "a": 0.5081,
+      "sand_silt_clay_pct": null,
+      "LL": null,
+      "PL": null,
+      "uscs": null
+    },
+    "coal": {
+      "label": "Coal seam (lignite)",
+      "figure_label": "K",
+      "kind": "rock",
+      "role": "Critical confined aquifer",
+      "gamma_bulk_Npm3": 8600.0,
+      "gamma_bulk_range_kNpm3": [
+        8.4,
+        8.7
+      ],
+      "rho_bulk_kgpm3": 876.66,
+      "rho_dry_kgpm3": 876.66,
+      "rho_sat_kgpm3": 1250.5,
+      "w_natural": null,
+      "Gs": 1.4,
+      "Gs_source": "assumed, typical lignite (not reported)",
+      "n0": 0.3738,
+      "K_s_mps": 2.9e-06,
+      "K_s_range_mps": [
+        1.16e-06,
+        5.79e-06
+      ],
+      "K_s_basis": "0.1-0.5 m/day (~5 Lu, 423 packer tests); midpoint 0.25 m/day",
+      "vg_theta_r": 0.02,
+      "vg_theta_s": 0.15,
+      "vg_alpha_1pm": 2.0,
+      "vg_alpha_1pPa": 0.00020387,
+      "vg_n": 1.8,
+      "vg_m": 0.4444,
+      "vg_tier": "B",
+      "vg_basis": "single-porosity equivalent continuum for fractured medium (Peters & Klavetter 1988); theta_s = fracture porosity ~0.15, RQD ~70%",
+      "vg_sd": null,
+      "E_Pa": 93431000.0,
+      "E_lo_Pa": 62287000.0,
+      "E_hi_Pa": 124570000.0,
+      "E_i_Pa": 2340000000.0,
+      "MR": 300,
+      "MR_range": [
+        200,
+        400
+      ],
+      "HD_reduction_factor": 0.03993,
+      "nu": 0.32,
+      "nu_range": [
+        0.3,
+        0.35
+      ],
+      "G_Pa": 35391000.0,
+      "lambda_Pa": 62917000.0,
+      "K_bulk_Pa": 86510000.0,
+      "K0_at_rest": 0.4706,
+      "sigma_ci_Pa": 7800000.0,
+      "m_i": 18,
+      "GSI": 40,
+      "D": 1.0,
+      "m_b": 0.2477,
+      "s": 4.54e-05,
+      "a": 0.5114,
+      "sand_silt_clay_pct": null,
+      "LL": null,
+      "PL": null,
+      "uscs": null
+    },
+    "tuffite": {
+      "label": "Tuffite (Yatagan Fm.)",
+      "figure_label": "Ym",
+      "kind": "rock",
+      "role": "Weak pyroclastic layer",
+      "gamma_bulk_Npm3": 14400.0,
+      "gamma_bulk_range_kNpm3": [
+        13.8,
+        15.3
+      ],
+      "rho_bulk_kgpm3": 1467.9,
+      "rho_dry_kgpm3": 1467.9,
+      "rho_sat_kgpm3": 1880.7,
+      "w_natural": null,
+      "Gs": 2.5,
+      "Gs_source": "assumed (not reported)",
+      "n0": 0.4128,
+      "K_s_mps": 1e-09,
+      "K_s_range_mps": [
+        1e-10,
+        1e-08
+      ],
+      "K_s_basis": "not separately tested; low-K assumed",
+      "vg_theta_r": 0.05,
+      "vg_theta_s": 0.37,
+      "vg_alpha_1pm": 1.0,
+      "vg_alpha_1pPa": 0.00010194,
+      "vg_n": 1.3,
+      "vg_m": 0.2308,
+      "vg_tier": "B",
+      "vg_basis": "nonwelded-pyroclastic analog (Flint 2003); theta_s = 0.9*n0. LEAST-CONSTRAINED SWCC in the set",
+      "vg_sd": null,
+      "E_Pa": 32350000.0,
+      "E_lo_Pa": 18486000.0,
+      "E_hi_Pa": 36971000.0,
+      "E_i_Pa": 1256500000.0,
+      "MR": 350,
+      "MR_range": [
+        200,
+        400
+      ],
+      "HD_reduction_factor": 0.02575,
+      "nu": 0.33,
+      "nu_range": [
+        0.3,
+        0.36
+      ],
+      "G_Pa": 12162000.0,
+      "lambda_Pa": 23608000.0,
+      "K_bulk_Pa": 31716000.0,
+      "K0_at_rest": 0.4925,
+      "sigma_ci_Pa": 3590000.0,
+      "m_i": 15,
+      "GSI": 26,
+      "D": 1.0,
+      "m_b": 0.07595,
+      "s": 4.403e-06,
+      "a": 0.5292,
+      "sand_silt_clay_pct": null,
+      "LL": null,
+      "PL": null,
+      "uscs": null
+    },
+    "underclay": {
+      "label": "Underclay (Turgut Fm.)",
+      "figure_label": "Ly",
+      "kind": "soil",
+      "role": "Confining layer below coal (uplift-critical)",
+      "gamma_bulk_Npm3": 18400.0,
+      "gamma_bulk_range_kNpm3": [
+        16.1,
+        20.5
+      ],
+      "rho_bulk_kgpm3": 1875.6,
+      "rho_dry_kgpm3": 1543.7,
+      "rho_sat_kgpm3": 1926.2,
+      "w_natural": 0.215,
+      "Gs": 2.5,
+      "Gs_source": "paper mean (printed 2.44-25.7 is a typo for 2.44-2.57)",
+      "n0": 0.3825,
+      "K_s_mps": 1e-09,
+      "K_s_range_mps": [
+        1e-10,
+        5.6e-07
+      ],
+      "K_s_basis": "reported impervious; floor value. Rosetta3 plausibility estimate 5.6e-7 m/s",
+      "vg_theta_r": 0.105,
+      "vg_theta_s": 0.391,
+      "vg_alpha_1pm": 0.611,
+      "vg_alpha_1pPa": 6.2283e-05,
+      "vg_n": 1.345,
+      "vg_m": 0.2565,
+      "vg_tier": "A",
+      "vg_basis": "Rosetta3 model 3, SSC + dry BD 1.544 g/cm3 (Zhang & Schaap 2017)",
+      "vg_sd": {
+        "theta_r": 0.013,
+        "theta_s": 0.009,
+        "log10_alpha": 0.081,
+        "log10_n": 0.015,
+        "log10_Ksat": 0.106
+      },
+      "E_Pa": 15000000.0,
+      "E_lo_Pa": 10000000.0,
+      "E_hi_Pa": 25000000.0,
+      "E_i_Pa": null,
+      "MR": null,
+      "MR_range": null,
+      "HD_reduction_factor": null,
+      "nu": 0.35,
+      "nu_range": [
+        0.3,
+        0.45
+      ],
+      "G_Pa": 5555600.0,
+      "lambda_Pa": 12963000.0,
+      "K_bulk_Pa": 16667000.0,
+      "K0_at_rest": 0.5385,
+      "sigma_ci_Pa": null,
+      "m_i": null,
+      "GSI": null,
+      "D": null,
+      "m_b": null,
+      "s": null,
+      "a": null,
+      "sand_silt_clay_pct": [
+        22.5,
+        46.0,
+        31.5
+      ],
+      "LL": 51.1,
+      "PL": 22.9,
+      "uscs": "CL-CH"
+    },
+    "slope_debris": {
+      "label": "Slope debris",
+      "figure_label": "Mk_d",
+      "kind": "soil",
+      "role": "Surface layer / rainfall entry point",
+      "gamma_bulk_Npm3": 17600.0,
+      "gamma_bulk_range_kNpm3": [
+        16.7,
+        18.1
+      ],
+      "rho_bulk_kgpm3": 1794.1,
+      "rho_dry_kgpm3": 1346.9,
+      "rho_sat_kgpm3": 1838.6,
+      "w_natural": 0.332,
+      "Gs": 2.65,
+      "Gs_source": "assumed (not reported)",
+      "n0": 0.4917,
+      "K_s_mps": 1.2e-06,
+      "K_s_range_mps": [
+        1e-07,
+        1e-05
+      ],
+      "K_s_basis": "NOT TESTED. Rosetta3 estimate 1.2e-6 m/s adopted so the rainfall Neumann BC has a receiving medium; sensitivity-critical",
+      "vg_theta_r": 0.124,
+      "vg_theta_s": 0.473,
+      "vg_alpha_1pm": 0.523,
+      "vg_alpha_1pPa": 5.3313e-05,
+      "vg_n": 1.36,
+      "vg_m": 0.2647,
+      "vg_tier": "A",
+      "vg_basis": "Rosetta3 model 3, SSC + dry BD 1.347 g/cm3",
+      "vg_sd": {
+        "theta_r": 0.017,
+        "theta_s": 0.018,
+        "log10_alpha": 0.122,
+        "log10_n": 0.018,
+        "log10_Ksat": 0.149
+      },
+      "E_Pa": 8000000.0,
+      "E_lo_Pa": 5000000.0,
+      "E_hi_Pa": 15000000.0,
+      "E_i_Pa": null,
+      "MR": null,
+      "MR_range": null,
+      "HD_reduction_factor": null,
+      "nu": 0.35,
+      "nu_range": [
+        0.3,
+        0.4
+      ],
+      "G_Pa": 2963000.0,
+      "lambda_Pa": 6913600.0,
+      "K_bulk_Pa": 8888900.0,
+      "K0_at_rest": 0.5385,
+      "sigma_ci_Pa": null,
+      "m_i": null,
+      "GSI": null,
+      "D": null,
+      "m_b": null,
+      "s": null,
+      "a": null,
+      "sand_silt_clay_pct": [
+        3.5,
+        53.5,
+        43.0
+      ],
+      "LL": 62.4,
+      "PL": 28.4,
+      "uscs": "CH"
+    }
+  },
+  "hoek_brown_mc_equivalents": {
+    "note": "Equivalent c, phi from the Hoek (2002) closed-form MC linearisation over 0 <= sig3' <= sig3max. These describe the INTACT ROCK-MASS envelope and are far stronger than the discontinuity strengths that govern the real bedding-controlled failures. Use these ONLY for the GHB-vs-MC contrast (Step 5.2); the MC-SSR sweep (Step 5.1) uses mc_strength.design_pair. c and phi are not material constants here - they depend entirely on the confining range fitted.",
+    "design_sig3max_Pa": 850000.0,
+    "design_sig3max_basis": "0.25*gamma*H with gamma = 20 kN/m3, H = 170 m",
+    "by_stratum": {
+      "marl_sekkoy": {
+        "sig3max_25kPa": {
+          "c_Pa": 55261.0,
+          "phi_deg": 43.19
+        },
+        "sig3max_100kPa": {
+          "c_Pa": 61785.0,
+          "phi_deg": 36.57
+        },
+        "sig3max_400kPa": {
+          "c_Pa": 92372.0,
+          "phi_deg": 27.03
+        },
+        "sig3max_850kPa": {
+          "c_Pa": 130540.0,
+          "phi_deg": 21.72
+        }
+      },
+      "marl_weakzone": {
+        "sig3max_25kPa": {
+          "c_Pa": 10837.0,
+          "phi_deg": 30.89
+        },
+        "sig3max_100kPa": {
+          "c_Pa": 16835.0,
+          "phi_deg": 21.69
+        },
+        "sig3max_400kPa": {
+          "c_Pa": 33406.0,
+          "phi_deg": 13.5
+        },
+        "sig3max_850kPa": {
+          "c_Pa": 50363.0,
+          "phi_deg": 10.04
+        }
+      },
+      "coal": {
+        "sig3max_25kPa": {
+          "c_Pa": 11561.0,
+          "phi_deg": 49.58
+        },
+        "sig3max_100kPa": {
+          "c_Pa": 26872.0,
+          "phi_deg": 38.54
+        },
+        "sig3max_400kPa": {
+          "c_Pa": 66551.0,
+          "phi_deg": 27.24
+        },
+        "sig3max_850kPa": {
+          "c_Pa": 108190.0,
+          "phi_deg": 21.65
+        }
+      },
+      "tuffite": {
+        "sig3max_25kPa": {
+          "c_Pa": 4676.2,
+          "phi_deg": 31.33
+        },
+        "sig3max_100kPa": {
+          "c_Pa": 11592.0,
+          "phi_deg": 21.18
+        },
+        "sig3max_400kPa": {
+          "c_Pa": 27788.0,
+          "phi_deg": 13.16
+        },
+        "sig3max_850kPa": {
+          "c_Pa": 43865.0,
+          "phi_deg": 9.863
+        }
+      }
+    }
+  },
+  "mc_strength": {
+    "design_pair": {
+      "c_Pa": 4400.0,
+      "phi_deg": 15.4,
+      "phi_rad": 0.268781,
+      "tan_phi": 0.27545,
+      "applies_to": "smooth bedding, residual, marl (Sekkoy Fm.)",
+      "basis": "Table 3a lubricated residual AND back-analysis of INS-2/INS-3 at F=1; THIS is the pair to reduce in the MC-SSR sweep (Step 5.1)"
+    },
+    "sets": [
+      {
+        "id": "bedding_no_infill_wet",
+        "material": "marl",
+        "test": "direct shear, water-filled box",
+        "n": 8,
+        "peak": {
+          "c_Pa": 0.0,
+          "phi_deg": 27.9
+        },
+        "residual": {
+          "c_Pa": 0.0,
+          "phi_deg": 14.4
+        }
+      },
+      {
+        "id": "bedding_no_infill_lub",
+        "material": "marl",
+        "test": "direct shear, lubricated",
+        "n": 8,
+        "peak": {
+          "c_Pa": 5400.0,
+          "phi_deg": 28.0
+        },
+        "residual": {
+          "c_Pa": 4400.0,
+          "phi_deg": 15.4
+        }
+      },
+      {
+        "id": "bedding_slickensided_infill",
+        "material": "marl",
+        "test": "direct shear, lubricated",
+        "n": 7,
+        "peak": {
+          "c_Pa": 900.0,
+          "phi_deg": 14.0
+        },
+        "residual": {
+          "c_Pa": 0.0,
+          "phi_deg": 12.5
+        }
+      },
+      {
+        "id": "bedding_tuffite",
+        "material": "tuffite",
+        "test": "direct shear, lubricated",
+        "n": 9,
+        "peak": {
+          "c_Pa": 0.0,
+          "phi_deg": 34.2
+        },
+        "residual": {
+          "c_Pa": 0.0,
+          "phi_deg": 32.9
+        }
+      },
+      {
+        "id": "underclay_CD",
+        "material": "underclay",
+        "test": "consolidated-drained triaxial",
+        "n": 9,
+        "peak": {
+          "c_Pa": 10100.0,
+          "phi_deg": 19.2
+        },
+        "residual": {
+          "c_Pa": 13600.0,
+          "phi_deg": 13.1
+        }
+      },
+      {
+        "id": "fault_gouge_CD",
+        "material": "fault gouge",
+        "test": "consolidated-drained triaxial",
+        "n": 4,
+        "peak": {
+          "c_Pa": 16300.0,
+          "phi_deg": 29.4
+        },
+        "residual": {
+          "c_Pa": 14000.0,
+          "phi_deg": 19.1
+        }
+      },
+      {
+        "id": "slope_debris_CD",
+        "material": "slope debris",
+        "test": "consolidated-drained triaxial",
+        "n": 6,
+        "peak": {
+          "c_Pa": 8900.0,
+          "phi_deg": 21.7
+        },
+        "residual": {
+          "c_Pa": 8000.0,
+          "phi_deg": 15.8
+        }
+      }
+    ],
+    "back_analysis": [
+      {
+        "id": "INS-1",
+        "surface": "slickensided bedding",
+        "c_Pa": 1000.0,
+        "phi_deg": 15.0,
+        "note": "two Fig.14a envelopes closest at c=1 kPa; digitised mean phi 15.05 deg"
+      },
+      {
+        "id": "INS-2/3",
+        "surface": "smooth bedding",
+        "c_Pa": 4400.0,
+        "phi_deg": 15.4,
+        "note": "Fig.14b envelopes intersect at c=7.1 kPa, phi=16.6 deg, inside the RESIDUAL box"
+      }
+    ]
+  },
+  "geometry": {
+    "pit": {
+      "length_m": 2500.0,
+      "width_m": 750.0,
+      "max_depth_m": 170.0,
+      "initial_overall_angle_deg": 30.0,
+      "initial_overall_angle_range_deg": [
+        30.0,
+        32.0
+      ],
+      "redesigned_angle_deg": [
+        22.0,
+        24.0
+      ],
+      "bench_height_m": [
+        7.0,
+        10.0
+      ],
+      "berm_width_m": [
+        10.0,
+        12.0
+      ],
+      "bench_face_angle_deg": 60.0
+    },
+    "layer_thickness_m": {
+      "coal": [
+        1.0,
+        30.0
+      ],
+      "overburden_sekkoy": [
+        50.0,
+        230.0
+      ],
+      "slope_debris": [
+        2.0,
+        12.0
+      ],
+      "alluvium": [
+        2.0,
+        8.5
+      ]
+    },
+    "structure": {
+      "bedding_dip_deg": [
+        2.0,
+        26.0
+      ],
+      "joint_sets": [
+        {
+          "id": "J1",
+          "dip_deg": 84,
+          "dip_dir_deg": 171
+        },
+        {
+          "id": "J2",
+          "dip_deg": 86,
+          "dip_dir_deg": 12
+        },
+        {
+          "id": "J3",
+          "dip_deg": 75,
+          "dip_dir_deg": 71
+        }
+      ],
+      "joint_spacing_m": [
+        0.64,
+        1.02
+      ],
+      "Jv": 10.64,
+      "fault_dip_deg": [
+        65.0,
+        75.0
+      ],
+      "fault_throw_m": [
+        1.0,
+        20.0
+      ],
+      "fault_zone_width_m": [
+        0.05,
+        0.3
+      ],
+      "main_faults": [
+        "F1 (north, basin margin)",
+        "F17 (south, basin margin)"
+      ]
+    },
+    "stacking_order_top_to_bottom": [
+      "slope_debris",
+      "tuffite",
+      "marl_sekkoy",
+      "marl_weakzone",
+      "coal",
+      "underclay",
+      "karstic_basement"
+    ],
+    "sections": [
+      {
+        "panel": "a",
+        "name": "Section 1 N",
+        "x_range_m": [
+          0,
+          340
+        ],
+        "z_range_masl": [
+          260,
+          390
+        ],
+        "fault_F1_x_m": 320,
+        "profile": [
+          [
+            0,
+            265
+          ],
+          [
+            40,
+            292
+          ],
+          [
+            80,
+            308
+          ],
+          [
+            120,
+            320
+          ],
+          [
+            160,
+            332
+          ],
+          [
+            200,
+            344
+          ],
+          [
+            250,
+            358
+          ],
+          [
+            300,
+            372
+          ],
+          [
+            340,
+            382
+          ]
+        ]
+      },
+      {
+        "panel": "b",
+        "name": "Section 2 N",
+        "x_range_m": [
+          0,
+          300
+        ],
+        "z_range_masl": [
+          275,
+          450
+        ],
+        "fault_F1_x_m": 215,
+        "profile": [
+          [
+            0,
+            278
+          ],
+          [
+            40,
+            302
+          ],
+          [
+            80,
+            322
+          ],
+          [
+            120,
+            342
+          ],
+          [
+            160,
+            362
+          ],
+          [
+            200,
+            385
+          ],
+          [
+            215,
+            395
+          ],
+          [
+            250,
+            425
+          ],
+          [
+            300,
+            448
+          ]
+        ]
+      },
+      {
+        "panel": "c",
+        "name": "Section 4 N",
+        "x_range_m": [
+          0,
+          230
+        ],
+        "z_range_masl": [
+          275,
+          375
+        ],
+        "fault_F1_x_m": 225,
+        "profile": [
+          [
+            0,
+            276
+          ],
+          [
+            40,
+            296
+          ],
+          [
+            80,
+            312
+          ],
+          [
+            120,
+            328
+          ],
+          [
+            160,
+            342
+          ],
+          [
+            200,
+            358
+          ],
+          [
+            225,
+            368
+          ]
+        ]
+      },
+      {
+        "panel": "d",
+        "name": "Section 5 N",
+        "x_range_m": [
+          0,
+          250
+        ],
+        "z_range_masl": [
+          270,
+          380
+        ],
+        "fault_F1_x_m": 240,
+        "profile": [
+          [
+            0,
+            272
+          ],
+          [
+            40,
+            292
+          ],
+          [
+            80,
+            308
+          ],
+          [
+            120,
+            324
+          ],
+          [
+            160,
+            340
+          ],
+          [
+            200,
+            356
+          ],
+          [
+            240,
+            370
+          ]
+        ]
+      },
+      {
+        "panel": "e",
+        "name": "Section 7 N",
+        "x_range_m": [
+          0,
+          180
+        ],
+        "z_range_masl": [
+          190,
+          280
+        ],
+        "fault_F1_x_m": null,
+        "profile": [
+          [
+            0,
+            196
+          ],
+          [
+            30,
+            212
+          ],
+          [
+            60,
+            224
+          ],
+          [
+            90,
+            236
+          ],
+          [
+            120,
+            248
+          ],
+          [
+            150,
+            258
+          ],
+          [
+            180,
+            266
+          ]
+        ]
+      }
+    ],
+    "geometry_confidence": "GRADE C: digitised from small rasters with vertical exaggeration. +/-10 m vertical, +/-10 m horizontal. Adequate to size the collocation domain and place BCs; NOT adequate for a publishable SSR result. Re-digitise Fig.19 from the vector PDF before final runs."
+  },
+  "boundary_conditions": {
+    "piezometric_heads_masl": {
+      "karstic_bedrock": [
+        113.0,
+        197.0
+      ],
+      "coal_seam_typical": 205.0,
+      "coal_seam_measured_avg": 193.06,
+      "bedrock_measured_avg": 176.25,
+      "note": "coal-seam heads are fault-compartmentalised; GK.13/GKD1/GK.17/GK.18 sit in separate low compartments and should not be averaged with the rest"
+    },
+    "steady_state_justification": {
+      "max_Cv_pct": 8.39,
+      "wells_below_5pct": 20,
+      "wells_total": 23,
+      "conclusion": "Cv < 5% in 20 of 23 wells over the 2010-2011 monitoring year -> the pre-excavation head field is effectively steady. Use it as the steady-state initial condition; introduce transience only via excavation.",
+      "exclude_from_calibration": [
+        "GK.4",
+        "GK8'",
+        "GKD2"
+      ]
+    },
+    "seepage_face_flux": {
+      "model": "q(t) = q1 / sqrt(t)  (Nguyen & Raudkivi 1982 seepage-face solution)",
+      "q1_m3_day_per_m": 0.56,
+      "q1_m3_s_per_m": 6.48148e-06,
+      "cumulative_30day_m3_per_m": 5.3677,
+      "published_cumulative_m3_per_m": 5.37,
+      "validation": "reconstructed cumulative matches the published 5.37 to 3 s.f.",
+      "series": [
+        {
+          "t_day": 1,
+          "t_s": 86400.0,
+          "q_m3_day_per_m": 0.56,
+          "q_m3_s_per_m": 6.4815e-06
+        },
+        {
+          "t_day": 2,
+          "t_s": 172800.0,
+          "q_m3_day_per_m": 0.39598,
+          "q_m3_s_per_m": 4.5831e-06
+        },
+        {
+          "t_day": 3,
+          "t_s": 259200.0,
+          "q_m3_day_per_m": 0.32332,
+          "q_m3_s_per_m": 3.7421e-06
+        },
+        {
+          "t_day": 4,
+          "t_s": 345600.0,
+          "q_m3_day_per_m": 0.28,
+          "q_m3_s_per_m": 3.2407e-06
+        },
+        {
+          "t_day": 5,
+          "t_s": 432000.0,
+          "q_m3_day_per_m": 0.25044,
+          "q_m3_s_per_m": 2.8986e-06
+        },
+        {
+          "t_day": 6,
+          "t_s": 518400.0,
+          "q_m3_day_per_m": 0.22862,
+          "q_m3_s_per_m": 2.6461e-06
+        },
+        {
+          "t_day": 7,
+          "t_s": 604800.0,
+          "q_m3_day_per_m": 0.21166,
+          "q_m3_s_per_m": 2.4498e-06
+        },
+        {
+          "t_day": 8,
+          "t_s": 691200.0,
+          "q_m3_day_per_m": 0.19799,
+          "q_m3_s_per_m": 2.2915e-06
+        },
+        {
+          "t_day": 9,
+          "t_s": 777600.0,
+          "q_m3_day_per_m": 0.18667,
+          "q_m3_s_per_m": 2.1605e-06
+        },
+        {
+          "t_day": 10,
+          "t_s": 864000.0,
+          "q_m3_day_per_m": 0.17709,
+          "q_m3_s_per_m": 2.0496e-06
+        },
+        {
+          "t_day": 11,
+          "t_s": 950400.0,
+          "q_m3_day_per_m": 0.16885,
+          "q_m3_s_per_m": 1.9542e-06
+        },
+        {
+          "t_day": 12,
+          "t_s": 1036800.0,
+          "q_m3_day_per_m": 0.16166,
+          "q_m3_s_per_m": 1.871e-06
+        },
+        {
+          "t_day": 13,
+          "t_s": 1123200.0,
+          "q_m3_day_per_m": 0.15532,
+          "q_m3_s_per_m": 1.7976e-06
+        },
+        {
+          "t_day": 14,
+          "t_s": 1209600.0,
+          "q_m3_day_per_m": 0.14967,
+          "q_m3_s_per_m": 1.7322e-06
+        },
+        {
+          "t_day": 15,
+          "t_s": 1296000.0,
+          "q_m3_day_per_m": 0.14459,
+          "q_m3_s_per_m": 1.6735e-06
+        },
+        {
+          "t_day": 16,
+          "t_s": 1382400.0,
+          "q_m3_day_per_m": 0.14,
+          "q_m3_s_per_m": 1.6204e-06
+        },
+        {
+          "t_day": 17,
+          "t_s": 1468800.0,
+          "q_m3_day_per_m": 0.13582,
+          "q_m3_s_per_m": 1.572e-06
+        },
+        {
+          "t_day": 18,
+          "t_s": 1555200.0,
+          "q_m3_day_per_m": 0.13199,
+          "q_m3_s_per_m": 1.5277e-06
+        },
+        {
+          "t_day": 19,
+          "t_s": 1641600.0,
+          "q_m3_day_per_m": 0.12847,
+          "q_m3_s_per_m": 1.487e-06
+        },
+        {
+          "t_day": 20,
+          "t_s": 1728000.0,
+          "q_m3_day_per_m": 0.12522,
+          "q_m3_s_per_m": 1.4493e-06
+        },
+        {
+          "t_day": 21,
+          "t_s": 1814400.0,
+          "q_m3_day_per_m": 0.1222,
+          "q_m3_s_per_m": 1.4144e-06
+        },
+        {
+          "t_day": 22,
+          "t_s": 1900800.0,
+          "q_m3_day_per_m": 0.11939,
+          "q_m3_s_per_m": 1.3819e-06
+        },
+        {
+          "t_day": 23,
+          "t_s": 1987200.0,
+          "q_m3_day_per_m": 0.11677,
+          "q_m3_s_per_m": 1.3515e-06
+        },
+        {
+          "t_day": 24,
+          "t_s": 2073600.0,
+          "q_m3_day_per_m": 0.11431,
+          "q_m3_s_per_m": 1.323e-06
+        },
+        {
+          "t_day": 25,
+          "t_s": 2160000.0,
+          "q_m3_day_per_m": 0.112,
+          "q_m3_s_per_m": 1.2963e-06
+        },
+        {
+          "t_day": 26,
+          "t_s": 2246400.0,
+          "q_m3_day_per_m": 0.10983,
+          "q_m3_s_per_m": 1.2711e-06
+        },
+        {
+          "t_day": 27,
+          "t_s": 2332800.0,
+          "q_m3_day_per_m": 0.10777,
+          "q_m3_s_per_m": 1.2474e-06
+        },
+        {
+          "t_day": 28,
+          "t_s": 2419200.0,
+          "q_m3_day_per_m": 0.10583,
+          "q_m3_s_per_m": 1.2249e-06
+        },
+        {
+          "t_day": 29,
+          "t_s": 2505600.0,
+          "q_m3_day_per_m": 0.10399,
+          "q_m3_s_per_m": 1.2036e-06
+        },
+        {
+          "t_day": 30,
+          "t_s": 2592000.0,
+          "q_m3_day_per_m": 0.10224,
+          "q_m3_s_per_m": 1.1834e-06
+        }
+      ],
+      "WARNING": "the paper's text prints q1 = 0.056, which is a factor-of-ten typo. The 0.056 value propagated into the Step 1.1 SI sheet (6.48e-7 m3/s/m). USE 6.481e-6 m3/s/m."
+    },
+    "drawdown_analytic": {
+      "model": "h(x,t) = h0 - s_w * erfc( x / (2*sqrt(w*t)) )",
+      "h0_m": 30.0,
+      "s_w_m": 20.0,
+      "w_m2_per_day": 1850.0,
+      "w_m2_per_s": 0.021412,
+      "valid_range": {
+        "x_m": [
+          0,
+          500
+        ],
+        "t_day": [
+          1,
+          10
+        ]
+      },
+      "use": "Phase-5 validation target for the Richards solver; NOT a training label",
+      "WARNING": "w = T/S = 1850 m2/day with the paper's S = 3e-5 implies T = 0.056 m2/day, roughly two orders below the packer-test coal K for any plausible seam thickness. Either the figure uses a larger S or a smaller K. State which you adopt in the methodology - do not resolve it silently."
+    },
+    "storage_coefficient_S": 3e-05,
+    "rainfall": {
+      "status": "NOT YET ACQUIRED - blocking for Phase 2",
+      "required": "daily/hourly intensity, MGM Mugla station",
+      "reason": "INS-2 and INS-3 followed a heavy-rainfall week; the surface Neumann flux is the forcing the whole transient case rests on"
+    },
+    "gravity_mps2": 9.81,
+    "rho_w_kgpm3": 1000.0,
+    "gamma_w_Npm3": 9810.0
+  },
+  "validation": {
+    "design_criteria": {
+      "overall_slope_F_min": 1.3,
+      "overall_slope_F_target_range": [
+        1.3,
+        1.4
+      ],
+      "bench_F_min": 1.1,
+      "bench_max_height_m": 5.0,
+      "bench_max_face_angle_deg": 50.0,
+      "slope_debris_overall_angle_deg": [
+        25.0,
+        26.0
+      ]
+    },
+    "lem_factors_of_safety": [
+      {
+        "section": "Section 1 N",
+        "panel": "a",
+        "case": "initial project",
+        "angle_deg": 30,
+        "F": 1.24,
+        "source": "text",
+        "mechanism": "compound: debris + weak zone + marl, bedding-following"
+      },
+      {
+        "section": "Section 1 N",
+        "panel": "a",
+        "case": "stripping stage 1",
+        "elev_masl": 346,
+        "F": 1.242,
+        "source": "figure"
+      },
+      {
+        "section": "Section 1 N",
+        "panel": "a",
+        "case": "stripping stage 2",
+        "elev_masl": 330,
+        "F": 1.243,
+        "source": "figure"
+      },
+      {
+        "section": "Section 1 N",
+        "panel": "a",
+        "case": "stripping stage 3",
+        "elev_masl": 326,
+        "F": 1.264,
+        "source": "figure"
+      },
+      {
+        "section": "Section 1 N",
+        "panel": "a",
+        "case": "stripping stage 4",
+        "elev_masl": 317,
+        "F": 1.29,
+        "source": "figure"
+      },
+      {
+        "section": "Section 1 N",
+        "panel": "a",
+        "case": "stripping stage 5 (adopted)",
+        "elev_masl": 310,
+        "F": 1.315,
+        "source": "figure"
+      },
+      {
+        "section": "Section 2 N",
+        "panel": "b",
+        "case": "initial project",
+        "angle_deg": 30,
+        "F": 0.82,
+        "source": "text",
+        "mechanism": "compound along the underclay; most critical northern section"
+      },
+      {
+        "section": "Section 2 N",
+        "panel": "b",
+        "case": "stripping stage 1",
+        "elev_masl": 344,
+        "F": 0.897,
+        "source": "figure"
+      },
+      {
+        "section": "Section 2 N",
+        "panel": "b",
+        "case": "stripping stage 2",
+        "elev_masl": 334,
+        "F": 0.985,
+        "source": "figure"
+      },
+      {
+        "section": "Section 2 N",
+        "panel": "b",
+        "case": "stripping stage 3",
+        "elev_masl": 330,
+        "F": 1.056,
+        "source": "figure"
+      },
+      {
+        "section": "Section 2 N",
+        "panel": "b",
+        "case": "stripping stage 4 (adopted)",
+        "elev_masl": 302,
+        "F": 1.318,
+        "source": "figure"
+      },
+      {
+        "section": "Section 4 N",
+        "panel": "c",
+        "case": "initial project",
+        "angle_deg": 30,
+        "F": 1.01,
+        "source": "text",
+        "mechanism": "compound through overburden along Sekkoy bedding"
+      },
+      {
+        "section": "Section 4 N",
+        "panel": "c",
+        "case": "flattening",
+        "angle_deg": 25,
+        "F": 1.256,
+        "source": "figure"
+      },
+      {
+        "section": "Section 4 N",
+        "panel": "c",
+        "case": "flattening (adopted)",
+        "angle_deg": 22,
+        "F": 1.688,
+        "source": "figure"
+      },
+      {
+        "section": "Section 5 N",
+        "panel": "d",
+        "case": "initial project",
+        "angle_deg": 30,
+        "F": 0.94,
+        "source": "text",
+        "mechanism": "non-circular"
+      },
+      {
+        "section": "Section 5 N",
+        "panel": "d",
+        "case": "flattening",
+        "angle_deg": 25,
+        "F": 1.059,
+        "source": "figure"
+      },
+      {
+        "section": "Section 5 N",
+        "panel": "d",
+        "case": "flattening",
+        "angle_deg": 22,
+        "F": 1.342,
+        "source": "figure"
+      },
+      {
+        "section": "Section 5 N",
+        "panel": "d",
+        "case": "flattening",
+        "angle_deg": 20,
+        "F": 1.82,
+        "source": "figure"
+      },
+      {
+        "section": "Section 7 N",
+        "panel": "e",
+        "case": "initial project, coal removed",
+        "angle_deg": 30,
+        "F": 1.19,
+        "source": "text",
+        "mechanism": "compound through overburden + coal along underclay; confined coal aquifer degrades stability"
+      },
+      {
+        "section": "Section 7 N",
+        "panel": "e",
+        "case": "southward shift stage 1",
+        "F": 0.744,
+        "source": "figure"
+      },
+      {
+        "section": "Section 7 N",
+        "panel": "e",
+        "case": "southward shift stage 2",
+        "F": 0.707,
+        "source": "figure"
+      },
+      {
+        "section": "Section 7 N",
+        "panel": "e",
+        "case": "flattening",
+        "angle_deg": 20,
+        "F": 1.25,
+        "source": "figure",
+        "note": "text claims 1.3 here; benchmark against the printed 1.250"
+      },
+      {
+        "section": "Section 7 N",
+        "panel": "e",
+        "case": "flattening",
+        "angle_deg": 18,
+        "F": 1.346,
+        "source": "figure"
+      },
+      {
+        "section": "Section 1 S",
+        "case": "initial project",
+        "angle_deg": 30,
+        "F": 0.74,
+        "source": "text",
+        "mechanism": "multi-planar, Fault 17 controlled; most critical section in the pit"
+      },
+      {
+        "section": "Section 2 S",
+        "case": "initial project",
+        "angle_deg": 30,
+        "F": 0.84,
+        "source": "text",
+        "mechanism": "multi-planar"
+      },
+      {
+        "section": "Section 3 S",
+        "case": "initial project",
+        "angle_deg": 30,
+        "F": 0.87,
+        "source": "text",
+        "mechanism": "multi-planar"
+      },
+      {
+        "section": "Section 6 S",
+        "case": "initial project",
+        "angle_deg": 30,
+        "F": 1.16,
+        "source": "text",
+        "mechanism": "multi-planar"
+      },
+      {
+        "section": "Section 1 S",
+        "case": "flattened",
+        "angle_deg": 20,
+        "F": 1.28,
+        "source": "text"
+      }
+    ],
+    "fos_grade": "GRADE A: values printed on Fig.19 a-e, cross-checked against Section 8.2.2 text. Where both exist, benchmark against the figure value (3 d.p.) not the text value (2 d.p.).",
+    "monitoring_wells": [
+      {
+        "well": "AL1",
+        "unit": "Alluvium",
+        "h_min_masl": 169.0,
+        "h_max_masl": 173.5,
+        "h_avg_masl": 170.0,
+        "Cv_pct": 0.43
+      },
+      {
+        "well": "AL2",
+        "unit": "Alluvium",
+        "h_min_masl": 170.0,
+        "h_max_masl": 172.5,
+        "h_avg_masl": 170.5,
+        "Cv_pct": 0.4
+      },
+      {
+        "well": "AL3",
+        "unit": "Alluvium",
+        "h_min_masl": 166.5,
+        "h_max_masl": 171.5,
+        "h_avg_masl": 168.0,
+        "Cv_pct": 0.68
+      },
+      {
+        "well": "AL4",
+        "unit": "Alluvium",
+        "h_min_masl": 168.5,
+        "h_max_masl": 171.0,
+        "h_avg_masl": 168.5,
+        "Cv_pct": 0.36
+      },
+      {
+        "well": "AL5",
+        "unit": "Alluvium",
+        "h_min_masl": 167.5,
+        "h_max_masl": 170.0,
+        "h_avg_masl": 168.0,
+        "Cv_pct": 0.29
+      },
+      {
+        "well": "AL6",
+        "unit": "Alluvium",
+        "h_min_masl": 163.0,
+        "h_max_masl": 164.0,
+        "h_avg_masl": 163.5,
+        "Cv_pct": 0.05
+      },
+      {
+        "well": "GK.1",
+        "unit": "Bedrock carbonate",
+        "h_min_masl": 194.0,
+        "h_max_masl": 197.0,
+        "h_avg_masl": 195.5,
+        "Cv_pct": 0.5
+      },
+      {
+        "well": "GK.4",
+        "unit": "Bedrock carbonate",
+        "h_min_masl": 160.5,
+        "h_max_masl": 209.0,
+        "h_avg_masl": 200.5,
+        "Cv_pct": 7.38
+      },
+      {
+        "well": "GK.7",
+        "unit": "Bedrock carbonate",
+        "h_min_masl": 197.0,
+        "h_max_masl": 199.5,
+        "h_avg_masl": 197.0,
+        "Cv_pct": 0.5
+      },
+      {
+        "well": "GK.10",
+        "unit": "Bedrock carbonate",
+        "h_min_masl": 108.5,
+        "h_max_masl": 116.5,
+        "h_avg_masl": 112.0,
+        "Cv_pct": 2.74
+      },
+      {
+        "well": "GK.13",
+        "unit": "Coal seam",
+        "h_min_masl": 159.5,
+        "h_max_masl": 174.0,
+        "h_avg_masl": 166.0,
+        "Cv_pct": 2.05
+      },
+      {
+        "well": "GKD1",
+        "unit": "Coal seam",
+        "h_min_masl": 146.5,
+        "h_max_masl": 166.0,
+        "h_avg_masl": 158.5,
+        "Cv_pct": 3.17
+      },
+      {
+        "well": "GK.8",
+        "unit": "Coal seam",
+        "h_min_masl": 204.5,
+        "h_max_masl": 224.0,
+        "h_avg_masl": 220.0,
+        "Cv_pct": 2.81
+      },
+      {
+        "well": "GK.9",
+        "unit": "Coal seam",
+        "h_min_masl": 214.0,
+        "h_max_masl": 216.0,
+        "h_avg_masl": 216.5,
+        "Cv_pct": 0.25
+      },
+      {
+        "well": "GK.11",
+        "unit": "Coal seam",
+        "h_min_masl": 223.0,
+        "h_max_masl": 230.0,
+        "h_avg_masl": 226.5,
+        "Cv_pct": 0.76
+      },
+      {
+        "well": "GK.14",
+        "unit": "Coal seam",
+        "h_min_masl": 202.0,
+        "h_max_masl": 213.0,
+        "h_avg_masl": 211.0,
+        "Cv_pct": 1.62
+      },
+      {
+        "well": "GK.17",
+        "unit": "Coal seam",
+        "h_min_masl": 163.0,
+        "h_max_masl": 167.0,
+        "h_avg_masl": 165.0,
+        "Cv_pct": 0.97
+      },
+      {
+        "well": "GK.18",
+        "unit": "Coal seam",
+        "h_min_masl": 165.0,
+        "h_max_masl": 172.0,
+        "h_avg_masl": 167.0,
+        "Cv_pct": 1.66
+      },
+      {
+        "well": "GK8'",
+        "unit": "Coal seam",
+        "h_min_masl": 189.0,
+        "h_max_masl": 227.0,
+        "h_avg_masl": 207.0,
+        "Cv_pct": 8.39
+      },
+      {
+        "well": "GK.16",
+        "unit": "Turgut & others",
+        "h_min_masl": 165.0,
+        "h_max_masl": 181.5,
+        "h_avg_masl": 171.0,
+        "Cv_pct": 3.38
+      },
+      {
+        "well": "GK.19",
+        "unit": "Turgut & others",
+        "h_min_masl": 144.0,
+        "h_max_masl": 167.5,
+        "h_avg_masl": 158.0,
+        "Cv_pct": 4.75
+      },
+      {
+        "well": "GK.20",
+        "unit": "Turgut & others",
+        "h_min_masl": 103.0,
+        "h_max_masl": 116.5,
+        "h_avg_masl": 110.0,
+        "Cv_pct": 4.61
+      },
+      {
+        "well": "GKD2",
+        "unit": "Turgut & others",
+        "h_min_masl": 133.5,
+        "h_max_masl": 165.0,
+        "h_avg_masl": 158.0,
+        "Cv_pct": 8.03
+      }
+    ],
+    "cheapest_first_benchmark": {
+      "target": "SSR on the INS-1 profile with c = 1 kPa, phi = 15 deg must return F = 1.00",
+      "why": "single back-analysed section, no coupling required; run it before any pit section"
+    },
+    "shear_envelope_digitised": {
+      "source": "Fig. 11, normal-stress mapping CORRECTED (highest curve = 260 kPa)",
+      "points": [
+        {
+          "sigma_n_Pa": 68000.0,
+          "tau_peak_Pa": 37000.0,
+          "tau_res_Pa": 28000.0
+        },
+        {
+          "sigma_n_Pa": 131000.0,
+          "tau_peak_Pa": 64000.0,
+          "tau_res_Pa": 34000.0
+        },
+        {
+          "sigma_n_Pa": 196000.0,
+          "tau_peak_Pa": 109000.0,
+          "tau_res_Pa": 53000.0
+        },
+        {
+          "sigma_n_Pa": 260000.0,
+          "tau_peak_Pa": 146000.0,
+          "tau_res_Pa": 68000.0
+        }
+      ],
+      "fit_through_origin": {
+        "phi_peak_deg": 28.79,
+        "phi_residual_deg": 15.08,
+        "phi_residual_deg_excl_68kPa": 14.79
+      },
+      "table3a_reference": {
+        "phi_peak_deg": 27.9,
+        "phi_residual_deg": 14.4
+      },
+      "note": "constrained (c=0) fits are the meaningful ones; the unconstrained regression returns a physically meaningless negative cohesion and is the error bar, not the result"
+    }
+  },
+  "nondimensionalisation": {
+    "scales": {
+      "L_ref_m": 170.0,
+      "T_ref_s": 86400.0,
+      "H_ref_m": 30.0,
+      "sig_ref_Pa": 1000000.0,
+      "K_ref_mps": 1e-06,
+      "E_ref_Pa": 100000000.0,
+      "rho_b_ref_kgpm3": 1800.0,
+      "U_ref_m": 1.7
+    },
+    "scale_justification": {
+      "L_ref": "pit depth 170 m",
+      "T_ref": "1 day - the transient rainfall response is the phenomenon of interest",
+      "H_ref": "max piezometric head above the coal seam",
+      "sig_ref": "1 MPa, typical overburden stress",
+      "K_ref": "representative saturated conductivity (coal seam order)",
+      "E_ref": "REVISED to 1e8 Pa. The adopted rock-mass moduli span 8e6 to 2.09e8 Pa (geometric mean 3.8e7); the original 1e9 was stiffer than every stratum in the model and pushed u* an order of magnitude below O(1).",
+      "U_ref": "= sig_ref*L_ref/E_ref = 1.70 m"
+    },
+    "groups": {
+      "Pi_R_diff": 2.9896e-06,
+      "Pi_R_grav": 0.00050824,
+      "Pi_R_hz": 0.17647,
+      "Pi_M_body": 3.0019,
+      "Pi_M_couple": 0.2943
+    },
+    "diffusive_timescale": {
+      "T_diff_s": 28900000000.0,
+      "T_diff_days": 334490.0,
+      "T_diff_years": 916.4
+    },
+    "caveat": "The mechanical residual is balanced (all three groups O(1)). The Richards residual is NOT: Pi_R_diff ~ 3e-6 with T_ref = 1 day. That is physically correct - the pit's diffusive timescale is ~916 years - not an error. Keep T_ref = 1 day and apply explicit per-residual normalisation in the loss, reporting Pi_R_diff so the weighting is reproducible. The alternative (T_ref = L^2/K, giving Pi_R_diff = 1) targets quasi-steady drawdown instead and abandons the rainfall transient. State the choice in the methods section."
+  },
+  "constitutive_models": {
+    "richards": "mixed form: C(psi) dpsi/dt = div[K(psi) grad(psi + z)]",
+    "van_genuchten": {
+      "Se": "Se = (theta - theta_r)/(theta_s - theta_r) = [1 + |alpha*psi|^n]^(-m), psi < 0",
+      "m": "m = 1 - 1/n",
+      "K": "K(psi) = K_s * Se^0.5 * [1 - (1 - Se^(1/m))^m]^2   (Mualem 1976)",
+      "C": "C(psi) = dtheta/dpsi = alpha*m*n*(theta_s-theta_r)*Se^(1/m)*(1-Se^(1/m))^m / (1-m)",
+      "citation": "van Genuchten (1980); Mualem (1976)"
+    },
+    "mechanical": "quasi-static equilibrium: div(sigma_eff) + rho_b*g = 0",
+    "effective_stress": {
+      "form": "sigma_eff = sigma - chi * u_w * I   (Bishop)",
+      "chi": "chi = Se (effective saturation) in the unsaturated zone; chi = 1 when saturated",
+      "biot_alpha": 1.0,
+      "biot_note": "alpha_B = 1.0 assumed for soft rock/soil; refine from K_solid if available"
+    },
+    "bulk_density": "rho_b = rho_dry + n * S_w * rho_w, with S_w = Se*(theta_s-theta_r)/n + theta_r/n",
+    "porosity_update": "n = n0 + eps_v,  eps_v = du/dx + dw/dz",
+    "kozeny_carman": "K_s = K_s0 * (n/n0)^3 * ((1-n0)/(1-n))^2  - evaluated on the same collocation points, closing the two-way coupling without outer iteration",
+    "hoek_brown": {
+      "m_b": "m_b = m_i * exp((GSI-100)/(28-14D))",
+      "s": "s = exp((GSI-100)/(9-3D))",
+      "a": "a = 0.5 + (1/6)*[exp(-GSI/15) - exp(-20/3)]",
+      "envelope": "sigma_1' = sigma_3' + sigma_ci*(m_b*sigma_3'/sigma_ci + s)^a",
+      "citation": "Hoek, Carranza-Torres & Corkum (2002)"
+    }
+  },
+  "open_items": [
+    {
+      "item": "rainfall intensity time series (MGM Mugla station)",
+      "status": "BLOCKING for Phase 2",
+      "why": "the surface Neumann flux is the forcing for the entire transient case"
+    },
+    {
+      "item": "coal-seam K vs S ambiguity (conflict C10)",
+      "status": "decision required before Phase 3",
+      "why": "sets the Richards K_s and the storage term for the critical aquifer"
+    },
+    {
+      "item": "Fig. 19 section geometry at vector resolution",
+      "status": "required before publishable SSR",
+      "why": "a 10 m error in slope height moves F by more than the 5-10% agreement band committed to in the proposal"
+    },
+    {
+      "item": "Gs for marl, weak-zone marl, tuffite, coal, slope debris",
+      "status": "assumed",
+      "why": "all porosities and therefore the Kozeny-Carman reference state depend on them"
+    },
+    {
+      "item": "site oedometer / CD-triaxial stiffness for underclay and slope debris",
+      "status": "literature-typical values in use",
+      "why": "least-constrained parameters in Step 1.3"
+    },
+    {
+      "item": "dual-porosity treatment of the coal seam",
+      "status": "deferred",
+      "why": "bulk n0 = 0.374 is correct for elastic compressibility; fracture porosity ~0.15 governs advective transport if dual-porosity is later adopted"
+    }
+  ],
+  "sensitivity_priority": [
+    {
+      "rank": 1,
+      "parameter": "van Genuchten n (marl family)",
+      "range": "1.09 - 1.30",
+      "why": "most influential SWCC parameter; shifts wetting-front arrival at the coal seam by days"
+    },
+    {
+      "rank": 2,
+      "parameter": "tuffite SWCC set",
+      "range": "full nonwelded-pyroclastic analog family",
+      "why": "least-constrained SWCC in the model"
+    },
+    {
+      "rank": 3,
+      "parameter": "coal (alpha, n)",
+      "range": "+/- 50%",
+      "why": "critical aquifer, equivalent-continuum fit"
+    },
+    {
+      "rank": 4,
+      "parameter": "E' underclay and slope debris",
+      "range": "10-25 MPa / 5-15 MPa",
+      "why": "literature-typical, no site stiffness data"
+    },
+    {
+      "rank": 5,
+      "parameter": "E_rm marl",
+      "range": "179 - 478 MPa",
+      "why": "MR 150-200 tabulated band, plus the roadmap's 400 as an upper case"
+    },
+    {
+      "rank": 6,
+      "parameter": "nu (all strata)",
+      "range": "adopted to Vasarhelyi rock-mass estimate",
+      "why": "second-order for F, first-order for K0 in the geostatic initial condition"
+    },
+    {
+      "rank": 7,
+      "parameter": "K_s slope debris",
+      "range": "1e-7 - 1e-5 m/s",
+      "why": "never tested; it is the medium the rainfall BC discharges into"
+    }
+  ]
+}
