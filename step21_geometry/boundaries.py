@@ -14,6 +14,8 @@ HYDROGEOLOGICAL CONTEXT
 """
 import numpy as np
 import geometry as g
+import properties as P
+import vg
 
 RAIN_FLUX = 5.56e-6          # m/s, 20 mm/hr triggered case
 Z_WT      = 197.0            # m a.s.l., top of the karstic head range
@@ -128,6 +130,7 @@ NU   = {"Mk": 0.28,   "Mk_d": 0.30,   "Tm": 0.25}
 K0   = {k: v / (1.0 - v) for k, v in NU.items()}
 
 G_ACC = 9.81
+RHO_W = 1000.0
 
 FIXED         = ("base",)
 ROLLER_X      = ("far_field_f1", "pit_floor")
@@ -145,14 +148,29 @@ def mechanical_bc(segment):
     raise ValueError("unknown segment: " + segment)
 
 
-def body_force(x, z):
-    """(N,2) body force rho(x,z)*g, downward. Zero outside the domain.
-    rho comes from material_tag, so the 1519/1723/2650 density contrast
-    enters the momentum residual automatically."""
+def body_force(x, z, psi=None):
+    """(N,2) body force rho_b(x,z,psi)*g, downward. Zero outside the domain.
+
+    rho_b = rho_dry + theta(psi) * rho_w.
+
+    psi=None reproduces the old DRY behaviour and is kept only so existing
+    callers do not silently break -- it is NOT the physical case. Pass the
+    network's psi in Phase 3; the body force is part of the HM coupling and
+    autograd must flow through it.
+    """
     tag = g.material_tag(x, z)
     rho = np.zeros(np.shape(tag), float)
-    for k, v in g.RHO.items():
+    for k, v in P.RHO_DRY.items():
         rho[tag == k] = v
+    if psi is not None:
+        th = np.zeros(np.shape(tag), float)
+        for k in P.UNITS:
+            m = tag == k
+            if m.any():
+                th[m] = vg.theta(np.asarray(psi, float)[m],
+                                 P.THETA_R[k], P.THETA_S[k],
+                                 P.ALPHA[k], P.VG_N[k])
+        rho = rho + th * RHO_W
     return np.stack([np.zeros_like(rho), -rho * G_ACC], axis=-1)
 
 
@@ -163,14 +181,42 @@ def traction_free_normals(segment, pts):
     return outward_normal(g.z_ground, pts[:, 0])
 
 
-def sigma_v_geostatic(x, z, n_layers=None):
+# cumulative water-content integral, built once per unit.
+# theta depends on z only (psi_0 is linear in z), so INT theta dz is a 1-D
+# function per material. Tabulate it and interpolate: same speed as the closed
+# form, and exact to the grid.
+_ZQ = np.linspace(190.0, 380.0, 20001)
+
+
+def _water_cumint(unit, z_wt=197.0):
+    th = vg.theta(vg.psi_initial(_ZQ, z_wt),
+                  P.THETA_R[unit], P.THETA_S[unit],
+                  P.ALPHA[unit], P.VG_N[unit])
+    F = np.concatenate([[0.0], np.cumsum(0.5 * (th[1:] + th[:-1]) * np.diff(_ZQ))])
+    return F
+
+
+_WCUM = {u: _water_cumint(u) for u in P.UNITS}
+
+
+def _wint(unit, a, b):
+    """INT_a^b theta(z) dz, elementwise, clipped at a<=b."""
+    F = _WCUM[unit]
+    return np.clip(np.interp(b, _ZQ, F) - np.interp(a, _ZQ, F), 0.0, None)
+
+
+def sigma_v_geostatic(x, z, n_layers=None, wet=True, z_wt=197.0):
     """Vertical geostatic stress (Pa, compression positive).
 
-    Closed form, not quadrature. Every column is at most two layers because
-    the Mk/Mk_d divide is vertical, so a column is Mk-over-Tm or Mk_d-over-Tm,
-    never both. Exact to machine precision; the trapz version carried a few
-    hundred Pa of node-alignment jitter that varied with x.
+    Closed form for the dry skeleton -- every column is at most two layers,
+    because the Mk/Mk_d divide is vertical, so a column is Mk-over-Tm or
+    Mk_d-over-Tm, never both.
 
+    The water weight is added as a tabulated 1-D integral of theta(z) under the
+    t = 0 suction profile psi_0 = -(z - z_wt). It has no closed form for
+    van Genuchten n = 1.2.
+
+    wet=False reproduces the old dry column, for comparison only.
     n_layers is accepted and ignored, for signature compatibility.
     """
     x = np.asarray(x, float)
@@ -179,10 +225,20 @@ def sigma_v_geostatic(x, z, n_layers=None):
     # the contact pinches out at the toe; digitisation puts it ~0.14 m above
     # ground at x = 0, which would otherwise integrate a negative thickness
     ztm = np.minimum(g.z_tm_top(x), top)
-    rho_up = np.where(x < g.X_MK_DIVIDE, g.RHO["Mk"], g.RHO["Mk_d"])
-    h_up = np.clip(top - np.maximum(z, ztm), 0.0, None)   # marl above the point
-    h_tm = np.clip(ztm - z, 0.0, None)                    # Tm above the point
-    return G_ACC * (rho_up * h_up + g.RHO["Tm"] * h_tm)
+    is_mk = x < g.X_MK_DIVIDE
+    up = np.where(is_mk, "Mk", "Mk_d")
+    rho_up = np.where(is_mk, P.RHO_DRY["Mk"], P.RHO_DRY["Mk_d"])
+    z_up = np.maximum(z, ztm)
+    h_up = np.clip(top - z_up, 0.0, None)      # marl above the point
+    h_tm = np.clip(ztm - z, 0.0, None)         # Tm above the point
+    dry = rho_up * h_up + P.RHO_DRY["Tm"] * h_tm
+    if not wet:
+        return G_ACC * dry
+    w_up = np.where(is_mk,
+                    _wint("Mk", z_up, top),
+                    _wint("Mk_d", z_up, top))
+    w_tm = _wint("Tm", z, ztm)
+    return G_ACC * (dry + RHO_W * (w_up + w_tm))
 
 
 K0_SMOOTH_W = 2.0   # m, half-width of the K0 transition across the contact
