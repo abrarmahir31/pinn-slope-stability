@@ -13,7 +13,6 @@ dependencies:
   - pymupdf
   - pillow
   - gh
-prefix: /home/abrar/miniforge3/envs/rosetta-ml
   - pip
   - pip:
     - rosetta-soil==0.1.2
