@@ -78,4 +78,4 @@ class PINN(nn.Module):
     def summary(self):
         return (f"PINN {self.cfg.n_layers}x{self.cfg.n_neurons} "
                 f"{self.cfg.activation} | {self.n_parameters():,} params | "
-                f"{self.cfg.dtype} on {self.cfg.device}")
+                f"{self.cfg.dtype} on {self.device}")

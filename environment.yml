@@ -1,0 +1,20 @@
+# NOTE: torch is intentionally NOT pinned here - install the CPU build on
+# the laptop and the matching CUDA build on the lab PC. See README.
+name: pinn
+channels:
+  - conda-forge
+dependencies:
+  - pip
+  - python=3.10
+  - numpy
+  - matplotlib
+  - scipy
+  - pandas
+  - pymupdf
+  - pillow
+  - gh
+prefix: /home/abrar/miniforge3/envs/rosetta-ml
+  - pip
+  - pip:
+    - rosetta-soil==0.1.2
+    - pytest
