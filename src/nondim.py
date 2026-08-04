@@ -51,8 +51,8 @@ class Scales:
     E_ref:   float = 1.0e9        # Pa    representative rock-mass modulus (~1 GPa)
 
     # --- representative bulk properties (for body-force group only) ---
-    rho_b_ref: float = 1800.0     # kg/m^3 saturated bulk density (mid-range)
-
+    rho_b_ref: float = 1800.0    # kg/m^3, arbitrary O(1) reference (Mk sat = 1946)
+    dtheta_ref: float = 0.377    # theta_s - theta_r, Mk; global scale not per-material
     # --- derived scales (computed in __post_init__ via object.__setattr__) ---
     U_ref: float = field(default=0.0)   # m  displacement scale = sig_ref*L_ref/E_ref
 
@@ -62,14 +62,13 @@ class Scales:
     # -- dimensionless groups appearing in the residuals ------------------
     @property
     def Pi_R_diff(self) -> float:
-        """Richards diffusion group:  T_ref * K_ref / L_ref^2 .
+        """Richards diffusion group:  T_ref * K_ref * H_ref / (L_ref^2 * dtheta_ref).
         Multiplies the spatial-diffusion term when time is the leading term."""
-        return self.T_ref * self.K_ref * self.H_ref / self.L_ref**2
-
+        return self.T_ref * self.K_ref * self.H_ref / self.L_ref**2 / self.dtheta_ref
     @property
     def Pi_R_grav(self) -> float:
-        """Richards gravity/drainage group:  K_ref * T_ref / L_ref ."""
-        return self.K_ref * self.T_ref / self.L_ref
+        """Richards gravity/drainage group:  K_ref * T_ref / (L_ref * dtheta_ref)."""
+        return self.K_ref * self.T_ref / self.L_ref / self.dtheta_ref
 
     @property
     def Pi_R_hz(self) -> float:
