@@ -1,0 +1,55 @@
+CHARACTERISTIC SCALES (Işıkdere)
+  L_ref   =          170 m     (pit depth)
+  T_ref   =     8.64e+04 s     (1 day)
+  H_ref   =           30 m     (head above coal seam)
+  sig_ref =        1e+06 Pa    (1 MPa overburden)
+  K_ref   =        1e-06 m/s   (sat. conductivity)
+  E_ref   =        1e+09 Pa    (rock-mass modulus)
+  U_ref   =         0.17 m     (= sig_ref*L_ref/E_ref)
+
+DIMENSIONLESS GROUPS
+  Pi_R_diff  = T*K/L^2      = 8.9689e-05
+  Pi_R_grav  = K*T/L        = 5.0824e-04
+  Pi_R_hz    = H/L          = 1.7647e-01
+  Pi_M_body  = rho*g*L/sig  = 3.0019e+00
+  Pi_M_couple= rho_w*g*H/sig= 2.9430e-01
+
+============================================================
+CHECK 1 — dimensionless-group magnitudes (default scales)
+============================================================
+  Pi_R_diff (T*K/L^2)      =  8.9689e-05   OFF-SCALE  <-- rebalance
+  Pi_R_grav (K*T/L)        =  5.0824e-04   OFF-SCALE  <-- rebalance
+  Pi_R_hz   (H/L)          =  1.7647e-01   O(1) OK
+  Pi_M_body (rho g L/s)    =  3.0019e+00   O(1) OK
+  Pi_M_couple(rw g H/s)    =  2.9430e-01   O(1) OK
+
+============================================================
+CHECK 2 — Richards diffusion timescale
+============================================================
+  L_ref^2 / K_ref            = 2.8900e+10 s  = 334490.7 days = 916.4 yr
+  Interpretation: a pressure signal needs this long to diffuse
+  across the pit depth. The per-day T_ref is far shorter, so the
+  diffusion term is correctly tiny on a 1-day residual.
+
+  Rebalanced with T_ref = L^2/K:
+    Pi_R_diff (T*K/L^2)      =  3.0000e+01   O(1) OK
+    Pi_R_grav (K*T/L)        =  1.7000e+02   OFF-SCALE  <-- rebalance
+    Pi_R_hz   (H/L)          =  1.7647e-01   O(1) OK
+    Pi_M_body (rho g L/s)    =  3.0019e+00   O(1) OK
+    Pi_M_couple(rw g H/s)    =  2.9430e-01   O(1) OK
+
+  With this choice Pi_R_diff = 1 exactly; the gravity group
+  becomes K*T/L = L/H-scale ~ O(L/H). Choose T_ref per the
+  physics you want the network to resolve:
+    * transient rainfall response over days -> T_ref = 1 day
+      (then explicitly weight the seepage residual, or
+       non-dimensionalise psi so the small group is absorbed).
+    * quasi-steady drawdown over the pit -> T_ref = L^2/K.
+
+============================================================
+CHECK 3 — algebraic round-trip (raw -> nd -> raw)
+============================================================
+  raw residual              =  2.342000e+03 N/m^3
+  nd residual               =  3.981400e-01  (O(1)? yes)
+  reconstructed raw residual=  2.342000e+03 N/m^3
+  round-trip abs error      =  9.095e-13   PASS
