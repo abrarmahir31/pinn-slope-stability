@@ -64,7 +64,7 @@ class Scales:
     def Pi_R_diff(self) -> float:
         """Richards diffusion group:  T_ref * K_ref / L_ref^2 .
         Multiplies the spatial-diffusion term when time is the leading term."""
-        return self.T_ref * self.K_ref / self.L_ref**2
+        return self.T_ref * self.K_ref * self.H_ref / self.L_ref**2
 
     @property
     def Pi_R_grav(self) -> float:

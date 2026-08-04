@@ -15,7 +15,7 @@ Confirms two things:
       GradNorm work rather than merely relabelling the imbalance.
 """
 import math
-from nondim import Scales, SCALES, report_scales, G_ACCEL, RHO_W
+from src.nondim import Scales, SCALES, report_scales, G_ACCEL, RHO_W
 
 
 def check_group_magnitudes(s: Scales) -> dict:
