@@ -1,11 +1,10 @@
-import pathlib
 """
 Step 1.2-1.3: SWCC (van Genuchten) + elastic parameters for Isikdere strata.
 Source data: Ulusay et al. (2014), Eng. Geol. 181, 261-280, Tables 2 & site GSI/UCS.
 """
 import json, math
 import numpy as np
-from rosetta import rosetta, SoilData, SoilData
+from rosetta import rosetta
 
 G = 9.81  # m/s^2, consistent with Step 1.1 sheet
 
@@ -31,7 +30,7 @@ print("=" * 78)
 def run_rosetta(rows, version=3):
     """rows: [sand, silt, clay, (bd)]; estimate_type='log' -> cols 2-5 are log10 means.
     Cols: 0 theta_r, 1 theta_s, 2 log10 alpha(1/cm), 3 log10 n, 4 log10 Ksat(cm/day)"""
-    mean, stdev, codes = rosetta(version, SoilData.from_array(rows))
+    sed -n '1,10p;30,40p' derive_step_1_2_1_3.py
     return mean, stdev, codes
 
 results = {}
@@ -164,5 +163,5 @@ for name, p in soils_E.items():
           f"   G = {Gm:.2e} Pa  lambda = {lam:.2e} Pa")
 
 json.dump(dict(step12=results, rock_porosity=rock_poro, step13=elastic),
-          open(pathlib.Path(__file__).resolve().parent.parent / "data" / "derived_raw.json", "w"), indent=1, default=float)
+          open("../data/derived_raw.json", "w"), indent=1, default=float)
 print("\nSaved ../data/derived_raw.json")
