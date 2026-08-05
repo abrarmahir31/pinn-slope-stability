@@ -52,7 +52,7 @@ class Scales:
 
     # --- representative bulk properties (for body-force group only) ---
     rho_b_ref: float = 1800.0    # kg/m^3, arbitrary O(1) reference (Mk sat = 1946)
-    dtheta_ref: float = 0.377    # theta_s - theta_r, Mk; global scale not per-material
+    dtheta_ref: float = 0.33    # theta_s - theta_r, Mk; global scale not per-material
     # --- derived scales (computed in __post_init__ via object.__setattr__) ---
     U_ref: float = field(default=0.0)   # m  displacement scale = sig_ref*L_ref/E_ref
 
@@ -177,8 +177,8 @@ def report_scales(s: Scales = SCALES) -> str:
     lines.append(f"  U_ref   = {s.U_ref:>12.4g} m     (= sig_ref*L_ref/E_ref)")
     lines.append("")
     lines.append("DIMENSIONLESS GROUPS")
-    lines.append(f"  Pi_R_diff  = T*K/L^2      = {s.Pi_R_diff:.4e}")
-    lines.append(f"  Pi_R_grav  = K*T/L        = {s.Pi_R_grav:.4e}")
+    lines.append(f"  Pi_R_diff  = T*K*H/(L^2*dth)     = {s.Pi_R_diff:.4e}")
+    lines.append(f"  Pi_R_grav  = K*T/(L*dth)         = {s.Pi_R_grav:.4e}")
     lines.append(f"  Pi_R_hz    = H/L          = {s.Pi_R_hz:.4e}")
     lines.append(f"  Pi_M_body  = rho*g*L/sig  = {s.Pi_M_body:.4e}")
     lines.append(f"  Pi_M_couple= rho_w*g*H/sig= {s.Pi_M_couple:.4e}")

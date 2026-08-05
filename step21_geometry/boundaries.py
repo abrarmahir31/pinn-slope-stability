@@ -14,8 +14,8 @@ HYDROGEOLOGICAL CONTEXT
 """
 import numpy as np
 import geometry as g
-import properties as P
-import vg
+from src import properties as P
+from src import vg
 
 RAIN_FLUX = 5.56e-6          # m/s, 20 mm/hr triggered case
 Z_WT      = 197.0            # m a.s.l., top of the karstic head range

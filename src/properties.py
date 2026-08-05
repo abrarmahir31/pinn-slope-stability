@@ -29,6 +29,7 @@ from pathlib import Path
 _HERE = Path(__file__).resolve().parent
 _CANDIDATES = [
     _HERE.parent / "Phase 1" / "isikdere_phase1_dataset.json",
+    _HERE.parent / "step21_geometry" / "Phase 1" / "isikdere_phase1_dataset.json",
     _HERE / "Phase 1" / "isikdere_phase1_dataset.json",
 ]
 _PATH = next((p for p in _CANDIDATES if p.exists()), None)

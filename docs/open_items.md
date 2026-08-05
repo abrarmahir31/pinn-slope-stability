@@ -45,3 +45,6 @@
   effective_stress_nd). Do not duplicate.
 - C_star convention: C(psi) returns C * H_ref (dimensionless).
 - theta_s := n0 per unit (0.427 Mk), overriding the literature 0.38.
+- [ ] step21_geometry/*.py use bare sibling imports (import geometry, import vg).
+      Only work when run from inside that dir. Needs sys.path shim or package
+      conversion before loss.py imports boundaries.py.
