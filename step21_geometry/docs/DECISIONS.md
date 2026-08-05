@@ -62,3 +62,16 @@ generated artefact.
 14.4 m of rain against ~1.2 m regional annual) and infiltration capacity
 (q_rain/K_s(marl) = 5560, Green–Ampt ponding in ~11 min, so the ground-surface Neumann
 is over-specified and needs the same complementarity treatment as the seepage face).
+
+**vg.K_r NaN gradient at psi = 0 (fixed 2026-08-05).** The Mualem bracket
+(1 - s**(1/m))**m has an infinite derivative at s = 1, so autograd returned NaN
+for dK_r/dpsi on the water table. Every collocation point landing there would
+have poisoned L_PDE, and the failure would have surfaced in Phase 4 as an
+untraceable NaN loss. Fixed by substituting psi = -eps on the saturated branch
+BEFORE evaluating, keeping the exact 1.0 return via _where. An outer _where
+alone is insufficient: torch.where multiplies the discarded branch's gradient
+by zero, and 0 x inf = NaN. Clamping s to 1 - eps was also rejected -- it costs
+1.99% of K_r at saturation even at eps = 1e-12, because the m = 0.1667 exponent
+flattens the deficit (18.99% at eps = 1e-6).
+Found by cross-checking vg.py against an independent implementation written for
+materials.py; the independent version had the guard, vg.py did not.

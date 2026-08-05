@@ -79,11 +79,13 @@ def K_r(psi, alpha, n, eps=1e-12):
     magnitude over the domain's psi range. Expect the Richards residual to be
     numerically brutal; this is where per-term normalisation earns its keep.
     """
-    s = Se(psi, alpha, n)
-    s = _lib(s).clip(s, eps, 1.0) if _lib(s) is np else s.clamp(eps, 1.0)
+    psi_u = _where(psi < 0.0, psi, -eps + 0.0 * psi)
+    s = Se(psi_u, alpha, n)
+    s = np.clip(s, eps, 1.0 - eps) if _lib(s) is np else s.clamp(eps, 1.0 - eps)
     m = 1.0 - 1.0 / n
     inner = 1.0 - (1.0 - s ** (1.0 / m)) ** m
-    return s ** 0.5 * inner ** 2
+    kr = s ** 0.5 * inner ** 2
+    return _where(psi < 0.0, kr, 1.0 + 0.0 * kr)
 
 
 # --------------------------------------------------------------------------
