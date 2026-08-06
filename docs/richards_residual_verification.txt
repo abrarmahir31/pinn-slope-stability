@@ -1,0 +1,8 @@
+term               max |.|
+storage       0.000000e+00
+diffusion     5.936317e-04
+gravity       5.936317e-04
+RESIDUAL      6.776264e-21
+
+K* range: 4.277e-07 .. 4.037e-03  (9.44e+03x)
+Pi_R_diff = 2.7178e-04   Pi_R_grav = 1.5401e-03   ratio L/H = 5.6667

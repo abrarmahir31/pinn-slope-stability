@@ -48,3 +48,21 @@
 - [ ] step21_geometry/*.py use bare sibling imports (import geometry, import vg).
       Only work when run from inside that dir. Needs sys.path shim or package
       conversion before loss.py imports boundaries.py.
+
+## Step 3.2 (6 Aug) — conventions confirmed against code
+- CORRECTION to the 4 Aug entry: C_star = C_phys * H_ref / dtheta_ref, NOT
+  C_phys * H_ref. Both Richards Pi groups carry the same 1/dtheta_ref divisor
+  (Pi_R_diff = 2.7178e-04, Pi_R_grav = 1.5401e-03), so the storage term must
+  too. materials.py line 84 already does this correctly. Verified 6 Aug.
+- vg.py is the authoritative SWCC; materials.py wraps it for units. Not a
+  duplicate implementation. residuals.swcc_from_material is the only place
+  physical units enter the residual layer.
+- [ ] dtheta_ref = 0.33 has no recorded provenance. Mk's own theta_s-theta_r
+      is 0.377. Now sits in the denominator of both Richards groups, so it is
+      no longer cosmetic. Find where 0.33 came from or retag it.
+- [ ] E_ref = 1e9 in nondim.py contradicts the Phase-1 decision to drop it to
+      100 MPa (no stratum is near 1 GPa). Gives U_ref = 0.17 m not 1.7 m.
+      Does not affect Richards; MUST be settled before the mechanical residual.
+- Hydrostatic Richards test: residual 6.78e-21 against terms of 5.94e-04,
+  relative 1.1e-17. Mutation-tested against gravity sign flip, missing H_ref
+  in Pi_R_diff, and dropped dK/dpsi term - all three caught.
