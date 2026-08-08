@@ -62,3 +62,33 @@ generated artefact.
 14.4 m of rain against ~1.2 m regional annual) and infiltration capacity
 (q_rain/K_s(marl) = 5560, Green–Ampt ponding in ~11 min, so the ground-surface Neumann
 is over-specified and needs the same complementarity treatment as the seepage face).
+
+## E_ref = 1e9 Pa — retained (8 Aug)
+The Phase-1 note "drop E_ref from 1 GPa to 100 MPa, no stratum is near 1 GPa"
+is a SECTION 7 statement and does not apply here. Section 5 rock-mass moduli
+(src/properties.py, authoritative):
+    Mk 2.0895e8   Mk_d 3.8057e7   Tm 4.2639e9 Pa
+Tm is 87.25% of the domain by area; the area-weighted mean is 3.73 GPa.
+
+Candidates, as ratios E_unit/E_ref (the coefficient that actually appears in
+the constitutive law) and the resulting U_ref = sig_ref*L_ref/E_ref:
+    1.000e8   Mk 2.090  Mk_d 0.381  Tm 42.639   U_ref 1.700 m
+    1.000e9   Mk 0.209  Mk_d 0.038  Tm  4.264   U_ref 0.170 m   <- ADOPTED
+    4.264e9   Mk 0.049  Mk_d 0.009  Tm  1.000   U_ref 0.040 m
+
+No choice makes all three O(1): the Tm/Mk_d stiffness contrast is 112x and is
+geology, not a scaling freedom — structurally the same situation as L/H = 5.67
+in the Richards groups. 1e9 gives the most balanced spread (geometric centre
+0.40, nothing beyond 4.3) and is within 3.7x of the area-weighted mean.
+4.264e9 optimises for the 87% unit but pushes Mk_d, the unit that FAILS, to
+0.009. U_ref = 0.17 m against expected displacements of a few cm gives
+u* ~ 0.25, which is the right order for tanh.
+
+E_ref enters the physics ONLY through U_ref and hence the stiffness ratio.
+It does NOT appear in Pi_M_body (rho_b_ref*g*L_ref/sig_ref) or Pi_M_couple
+(rho_w*g*H_ref/sig_ref). Verified: sig_ref*L_ref/E_ref = 0.17 = SCALES.U_ref.
+
+Also removed here: boundaries.py:130 held E_RM = {Mk 4.78e8, Mk_d 8.65e7,
+Tm 4.264e9}, a pre-correction copy (both marls high by 2.286 = 400/175, the
+MR revision). Dead constant, referenced nowhere. Deleted rather than fixed.
+src/properties.py is the single source of truth for stiffness.
