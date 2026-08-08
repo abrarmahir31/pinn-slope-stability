@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.png binary
+*.jpeg binary
+*.npz binary
+*.xlsx binary
+*.docx binary
+*.pdf binary
+*.zip binary
