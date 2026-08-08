@@ -130,7 +130,12 @@ def material_tag(x, z):
 # K jumps three orders of magnitude across the top-of-Tm contact, which runs
 # through the middle of the domain.
 
-RHO    = {"Mk": 1519.0, "Mk_d": 1723.0, "Tm": 2650.0}   # kg/m3
+try:
+    from src.properties import RHO_DRY as RHO   # dry density, kg/m3
+except ModuleNotFoundError:
+    import sys, pathlib as _pl
+    sys.path.insert(0, str(_pl.Path(__file__).resolve().parents[2]))
+    from src.properties import RHO_DRY as RHO
 K_S    = {"Mk": 1.0e-9, "Mk_d": 1.0e-9, "Tm": 3.13e-6}  # m/s
 SIG_CI = {"Mk": 1.79e7, "Mk_d": 4.29e6, "Tm": 7.0e7}    # Pa
 GSI    = {"Mk": 50,     "Mk_d": 45,     "Tm": 60}

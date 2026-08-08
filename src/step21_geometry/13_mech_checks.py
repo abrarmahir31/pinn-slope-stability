@@ -36,12 +36,19 @@ f = b.body_force(np.array([50.0]), np.array([400.0]))[0]
 rep("body force zero outside", abs(f[1]) < 1e-9)
 
 # 5 -- geostatic sigma_v vs rho*g*h by hand
+# The hand calculation is a DRY skeleton column. sigma_v_geostatic(wet=True)
+# adds rho_w * int(theta dz) under the t=0 suction profile, +9.6% here.
+# Compare like with like, then assert the water weight separately so it
+# cannot silently vanish.
 xq, zq = 200.0, 335.0
-sv = float(b.sigma_v_geostatic(np.array([xq]), np.array([zq]))[0])
+sv_dry = float(b.sigma_v_geostatic(np.array([xq]), np.array([zq]), wet=False)[0])
+sv_wet = float(b.sigma_v_geostatic(np.array([xq]), np.array([zq]))[0])
 h = float(g.z_ground(xq) - zq)
-approx = g.RHO["Mk_d"]*b.G_ACC*h
-rep("sigma_v at crest ~ rho*g*h", abs(sv-approx)/max(approx,1) < 0.05,
-    "%.0f vs %.0f Pa over %.1f m" % (sv, approx, h))
+approx = g.RHO["Mk_d"] * b.G_ACC * h
+rep("sigma_v (dry) ~ rho*g*h", abs(sv_dry - approx) / max(approx, 1) < 0.01,
+    "%.0f vs %.0f Pa over %.1f m" % (sv_dry, approx, h))
+rep("water weight adds 5-15%", 1.05 < sv_wet / sv_dry < 1.15,
+    "wet/dry = %.4f" % (sv_wet / sv_dry))
 
 # 6 -- monotonic with depth
 z = np.linspace(340.0, 210.0, 60)

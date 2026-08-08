@@ -24,3 +24,5 @@ src/step21_geometry/__pycache__/
 src/step21_geometry/ic_cache.npz
 src/step21_geometry/output/
 src/step21_geometry/figures/
+__pycache__/
+*.pyc

@@ -130,8 +130,12 @@ def mechanical_bc(segment):
 E_RM = {"Mk": 4.78e8, "Mk_d": 8.65e7, "Tm": 4.264e9}   # Pa
 NU   = {"Mk": 0.28,   "Mk_d": 0.30,   "Tm": 0.25}
 
-# K0 = nu/(1-nu). The roadmap's single 0.39 is the MARL value; Tm is 87% of
-# the domain by area and takes 0.333.
+try:
+    from src.properties import RHO_DRY as RHO   # dry density, kg/m3
+except ModuleNotFoundError:
+    import sys, pathlib
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+    from src.properties import RHO_DRY as RHO
 K0   = {k: v / (1.0 - v) for k, v in NU.items()}
 
 G_ACC = 9.81
