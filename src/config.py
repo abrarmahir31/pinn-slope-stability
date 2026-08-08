@@ -18,9 +18,9 @@ class NetConfig:
 # Dimensionless domain bounds (L_ref = 170 m, T_ref = 86400 s)
 # TODO: source these from geometry.py once Z_BASE and X_MK_DIVIDE are settled
 BOUNDS = {
-    "x_min": 0.0, "x_max": 4.41,   # 750 m / 170
-    "z_min": 0.0, "z_max": 1.18,   # 200 m / 170
-    "t_min": 0.0, "t_max": 30.0,   # 30 days
+    "x_min": 0.0,   "x_max": 1.577,   # 268.05 m / 170
+    "z_min": 1.173, "z_max": 2.106,   # 199.47-357.97 m / 170
+    "t_min": 0.0,   "t_max": 30.0,    # 30 days
 }
 
 
