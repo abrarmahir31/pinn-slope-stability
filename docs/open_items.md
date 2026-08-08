@@ -66,3 +66,15 @@
 - Hydrostatic Richards test: residual 6.78e-21 against terms of 5.94e-04,
   relative 1.1e-17. Mutation-tested against gravity sign flip, missing H_ref
   in Pi_R_diff, and dropped dK/dpsi term - all three caught.
+
+## Step 2.2 mechanical checks (8 Aug, found after repo import)
+- [ ] 13_mech_checks.py prints MECHANICAL CHECKS FAILED but exits 0.
+      Fix the exit code, or the && chain silently continues.
+- [ ] [FAIL] body force in Mk_d: -16900 N/m3. That IS Mk_d's gamma
+      (16.9 kN/m3), so the assertion's expected value is wrong, not the
+      code. Check whether it compares against rho_dry*g vs gamma_nat.
+- [ ] [FAIL] sigma_v at crest: 156022 vs 142412 Pa over 8.4 m (+9.6%).
+      Implies gamma_eff 18.6 vs 17.0 kN/m3. Suspect wrong unit assigned
+      near the crest, or h measured to a contact not the ground surface.
+- Both are in the mechanical IC -> feed the gravity warm-up -> block the
+  mechanical residual. Not blocking sampling.py.

@@ -17,7 +17,12 @@ check, not dead weight.
 """
 
 import numpy as np
-from boundaries import Z_WT   # single source of truth
+try:
+    from boundaries import Z_WT          # single source of truth
+except ModuleNotFoundError:
+    import sys, pathlib
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+    from src.step21_geometry.boundaries import Z_WT
 
 
 def psi_initial(x, z):

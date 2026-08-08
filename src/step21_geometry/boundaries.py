@@ -13,9 +13,14 @@ HYDROGEOLOGICAL CONTEXT
     this is a rainfall-infiltration problem, not a confined-aquifer one.
 """
 import numpy as np
-import geometry as g
-import properties as P
-import vg
+try:
+    import geometry as g
+    from src import properties as P, vg
+except ModuleNotFoundError:
+    import sys, pathlib
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+    from src import properties as P, vg
+    from src.step21_geometry import geometry as g
 
 RAIN_FLUX = 5.56e-6          # m/s, 20 mm/hr triggered case
 Z_WT      = 197.0            # m a.s.l., top of the karstic head range
