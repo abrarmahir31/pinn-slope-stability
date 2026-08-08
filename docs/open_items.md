@@ -78,3 +78,17 @@
       near the crest, or h measured to a contact not the ground surface.
 - Both are in the mechanical IC -> feed the gravity warm-up -> block the
   mechanical residual. Not blocking sampling.py.
+
+## Duplicated constants (8 Aug)
+Two bugs today traced to the same cause: geometry.py held its own rounded copy
+of a constant that properties.py defines authoritatively.
+  - geometry.RHO Mk_d 1723.0 vs properties.RHO_DRY 1722.7 -> 2.94 N/m3 body
+    force error, and 25 Pa in sigma_v. Fixed: geometry.py now imports RHO_DRY.
+  - boundaries.E_RM held pre-MR-correction marl stiffness (2.286x high). Dead
+    constant, deleted.
+  - vg.py existed twice; the step21_geometry copy lacked the saturation guard
+    and would produce NaN gradients. Deleted.
+- [ ] STILL SHADOWED in geometry.py, all also in properties.py:
+      K_S, SIG_CI, GSI, M_I, D_DIST, C_RES, PHI_RES.
+      In sync as of today (SIG_CI verified identical). No test guards them.
+      Same drift risk. Convert to imports from properties.py.

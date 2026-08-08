@@ -126,3 +126,6 @@ check("geometry hash recorded", meta["geometry_sha"] == geometry_hash(), meta["g
 print(f"\narea fractions  {meta['area_fraction']}")
 print(f"sample shares   {meta['sample_share']}")
 print(f"\n{'ALL IC CHECKS PASSED -- Step 2.3 seepage+mechanical IC complete' if N_FAIL == 0 else f'{N_FAIL} CHECK(S) FAILED'}")
+
+import sys
+sys.exit(0 if N_FAIL == 0 else 1)

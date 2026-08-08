@@ -52,3 +52,5 @@ rep("properties defined", present <= set(g.K_S) & set(g.RHO), f"{sorted(present)
 
 print("\n" + ("ALL CHECKS PASSED -- proceed to Step 2.2"
               if ok else "CHECKS FAILED"))
+import sys
+sys.exit(0 if ok else 1)

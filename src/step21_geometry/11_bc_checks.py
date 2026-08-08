@@ -56,3 +56,5 @@ rep("far-field psi negative", bool((psi < 0).all()),
 
 print("\n" + ("ALL BC CHECKS PASSED -- proceed to Step 2.3"
               if ok else "BC CHECKS FAILED"))
+import sys
+sys.exit(0 if ok else 1)

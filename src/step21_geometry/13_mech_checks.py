@@ -78,3 +78,5 @@ rep("domain weight plausible", 5e8 < w < 5e9,
 
 print("\n" + ("ALL MECHANICAL CHECKS PASSED -- Step 2.2 complete"
               if ok else "MECHANICAL CHECKS FAILED"))
+import sys
+sys.exit(0 if ok else 1)
