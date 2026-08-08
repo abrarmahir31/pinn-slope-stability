@@ -8,7 +8,7 @@ class NetConfig:
     n_neurons:  int = 64
     activation: str = "tanh"
     init:       str = "xavier"
-    dtype:      str = "float32"
+    dtype: str = "float64"
     device:     str = "cuda"
     seed:       int = 42
     fourier_features: bool = False
