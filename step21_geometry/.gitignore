@@ -1,4 +1,0 @@
-*.bak
-__pycache__/
-*.pyc
-ic_cache.npz
