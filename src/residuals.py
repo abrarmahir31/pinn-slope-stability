@@ -76,11 +76,12 @@ def swcc_from_material(mat, s: Scales = SCALES) -> SWCC:
     from src import materials as _m  # local import: keeps tests free of it
 
     def C_star(psi_star: Tensor) -> Tensor:
-        return _m.C_star(psi_star * s.H_ref, mat)
+        return _m.C_star(psi_star * s.H_ref, mat, s=s)      # 8 spaces
 
     def K_star(psi_star: Tensor) -> Tensor:
-        return _m.K(psi_star * s.H_ref, mat) / s.K_ref
-
+        return _m.K(psi_star * s.H_ref, mat) / s.K_ref      # 8 spaces
+    
+    
     return SWCC(C_star=C_star, K_star=K_star,
                 name=getattr(mat, "name", "material"))
 

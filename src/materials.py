@@ -74,11 +74,12 @@ def K(psi, mat):
     return mat.K_s * vg.K_r(psi, mat.alpha, mat.n)
 
 
-def C_star(psi, mat):
+def C_star(psi, mat, s=None):
     """Dimensionless specific moisture capacity for the Richards residual.
 
     vg.C returns dtheta/dpsi in 1/m; H_ref makes it dimensionless and
     dtheta_ref applies the storage rescaling (see nondim.Pi_R_diff).
     """
+    s = SCALES if s is None else s
     return vg.C(psi, mat.theta_r, mat.theta_s, mat.alpha, mat.n) \
-        * SCALES.H_ref / SCALES.dtheta_ref
+        * s.H_ref / s.dtheta_ref
