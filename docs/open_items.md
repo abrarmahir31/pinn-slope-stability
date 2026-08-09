@@ -25,19 +25,14 @@
 - [ ] Lab PC: full config on CUDA, `on cuda: True`.
 
 ## Step 1.6 (reopened 4 Aug)
-- [x] Pi_R_diff was T*K/L^2 (units 1/m). Fixed to T*K*H/L^2.
-      Gravity/diffusion ratio now L/H = 5.67, was 170.
-- [ ] CHECK 2 "rebalanced" block is stale: under corrected groups,
-      T_ref = L^2/K gives Pi_R_diff = H_ref = 30, not 1. No choice of
-      T_ref makes both Richards terms O(1); the ratio L/H is fixed by
-      geometry. Rewrite the text.
-- [ ] CHECK 3 round-trips the MECHANICAL residual only (2342 N/m^3).
-      Richards has no round-trip test - and Richards is where the bug was.
-- [ ] DECISION: Richards residual scaling. Preferred = divide the whole
-      Richards equation by Pi_R_grav so all three terms are O(1) with
-      T_ref = 1 day retained. Alternative = T_ref = L^2/K.
-- [ ] rho_b_ref = 1800 kg/m3 is an arbitrary reference, not a Section 5
-      material (Mk sat = 1946). Either retag the comment or set to 1946.
+- [x] dtheta_ref = 0.33 provenance RESOLVED (9 Aug). It is Mk's
+      theta_s - theta_r = 0.38 - 0.05. The 0.377 in the earlier note
+      came from pairing Mk's theta_s (0.38) with Tm's theta_r (0.005);
+      theta_r is per-unit (Mk 0.05, Mk_d 0.05, Tm 0.005), not global.
+      No change to nondim.py. Perturbation test: setting dtheta_ref to
+      0.377 scales both Pi_R groups by 1/k and L_PDE by 1/k^2
+      (0.33/0.377 = 0.87533; loss 9.3928e-05 -> 7.1968e-05 = 0.87533^2).
+      Confirms the constant is load-bearing through to the loss.
 
 ## Step 3.2 design (settled 4 Aug)
 - residuals.py provides the AUTOGRAD layer only; the residual algebra
@@ -57,10 +52,6 @@
 - vg.py is the authoritative SWCC; materials.py wraps it for units. Not a
   duplicate implementation. residuals.swcc_from_material is the only place
   physical units enter the residual layer.
-- [ ] dtheta_ref = 0.33 has no recorded provenance. Mk's own theta_s-theta_r
-      is 0.377. Now sits in the denominator of both Richards groups, so it is
-      no longer cosmetic. Find where 0.33 came from or retag it.
-- [ ] E_ref = 1e9 in nondim.py contradicts the Phase-1 decision to drop it to
       100 MPa (no stratum is near 1 GPa). Gives U_ref = 0.17 m not 1.7 m.
       Does not affect Richards; MUST be settled before the mechanical residual.
 - Hydrostatic Richards test: residual 6.78e-21 against terms of 5.94e-04,
@@ -92,3 +83,19 @@ of a constant that properties.py defines authoritatively.
       K_S, SIG_CI, GSI, M_I, D_DIST, C_RES, PHI_RES.
       In sync as of today (SIG_CI verified identical). No test guards them.
       Same drift risk. Convert to imports from properties.py.
+
+## Step 3.2 (9 Aug)
+- residuals.swcc_from_material called _m.C, which does not exist
+  (materials exports C_star). The Material->SWCC branch had never
+  executed: every prior test passed an SWCC directly. Fixed b5cb629,
+  guarded by tests/test_residuals.py. New bug category: untested
+  WIRING between two well-tested modules, not an untested function.
+- src/nondim.py sat uncommitted-modified across a session boundary
+  (dtheta_ref 0.33->0.377, and report_scales labels reverted to the
+  4 Aug T*K/L^2 form). Found by `git stash` + re-run. Check
+  `git status --short` before trusting any measured number.
+- [ ] Tm mechanical params (sigma_ci 70 MPa, GSI 60, m_i 12) are
+      literature values for crystalline limestone. Ulusay Table 3b has
+      no row for this unit. Confirmed intentional (properties.py:5-6,
+      Tm postdates the Phase-1 dataset). Must be declared in methods
+      and carried as a Phase 5 sensitivity variable.
