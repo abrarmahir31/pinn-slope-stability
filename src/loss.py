@@ -10,9 +10,10 @@ mutation-tested Richards path untouched.
 
 from __future__ import annotations
 
-import torch
+import torch # type: ignore
 
 from src.nondim import SCALES, Scales
+from src.residuals import richards_residual
 from src.sampling import load_initial
 
 
@@ -66,3 +67,63 @@ def L_IC(net, coll, psi0_star):
     disp = (w * uv.pow(2).sum(dim=1, keepdim=True)).sum() / wsum
 
     return head + disp, {"ic_head": head.detach(), "ic_disp": disp.detach()}
+
+
+# ---------------------------------------------------------------
+# 3. PDE loss — hydro half
+#    Mechanical half blocked on the gravity warm-up (residuals.py:215)
+# ---------------------------------------------------------------
+def _psi_field(net):
+    """Wrap `net` so it yields psi* only, shape (N, 1).
+
+    residuals._psi_of returns a bare Tensor unchanged, so handing it the
+    raw net would make it treat u*, v* as extra psi columns and sum the
+    gradients across all three. No exception -- just a wrong number.
+    """
+    def fields(x, z, t):
+        return psi_of(net(x, z, t))
+    return fields
+
+
+def L_PDE(net, coll, mats, s: Scales = SCALES, normalise: str = "none",
+          per_tag: bool = False):
+    """mean_w[R_Richards^2] over the interior collocation set.
+
+    Split by coll.tag: richards_residual takes ONE material, and Mk /
+    Mk_d / Tm differ in K_s by ~3 orders. Masked blending is not an
+    option -- it would evaluate every material's van Genuchten at every
+    point and 0 * NaN = NaN would take the whole loss down silently.
+
+    Squared residuals accumulate across tags and divide by the GLOBAL
+    weight sum. Averaging the three per-tag means instead would give the
+    0.25-share material equal say with the 0.40-share one.
+
+    mats: {tag -> material}, from materials.py. Passed in, not inlined,
+    so the tag -> material mapping has one source of truth.
+    """
+    fields = _psi_field(net)
+    w_all = coll.w.detach()
+    wsum = w_all.sum()
+
+    total = torch.zeros((), dtype=coll.x.dtype, device=coll.x.device)
+    parts = {}
+
+    for tag in sorted(set(coll.tag.tolist())):
+        if tag not in mats:
+            raise KeyError(
+                f"L_PDE: collocation tag {tag!r} has no entry in mats. "
+                f"Tags present: {sorted(set(coll.tag.tolist()))}"
+            )
+        m = torch.as_tensor(coll.tag == tag, device=coll.x.device)
+        xs, zs, ts = coll.x[m], coll.z[m], coll.t[m]
+
+        R = richards_residual(fields, xs, zs, ts, mats[tag],
+                              s=s, normalise=normalise)
+
+        contrib = (w_all[m] * R.pow(2)).sum()
+        total = total + contrib
+        if per_tag:
+            parts[f"pde_richards_{tag}"] = (contrib / w_all[m].sum()).detach()
+
+    pde = total / wsum
+    return pde, {"pde_richards": pde.detach(), **parts}

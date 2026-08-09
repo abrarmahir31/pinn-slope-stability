@@ -26,8 +26,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence
 
-import torch
-from torch import Tensor
+import torch 
+from torch import Tensor 
 
 from src.derivatives import divergence, grad
 from src.nondim import SCALES, Scales, richards_residual_nd
@@ -76,7 +76,7 @@ def swcc_from_material(mat, s: Scales = SCALES) -> SWCC:
     from src import materials as _m  # local import: keeps tests free of it
 
     def C_star(psi_star: Tensor) -> Tensor:
-        return _m.C(psi_star * s.H_ref, mat)
+        return _m.C_star(psi_star * s.H_ref, mat)
 
     def K_star(psi_star: Tensor) -> Tensor:
         return _m.K(psi_star * s.H_ref, mat) / s.K_ref
