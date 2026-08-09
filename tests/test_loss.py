@@ -8,9 +8,11 @@ creeping into a path whose verification depends on float64.
 import torch
 
 from src.config import BOUNDS, full
-from src.loss import L_IC, ic_targets, psi_of, uv_of
+from src.loss import L_IC, L_PDE, ic_targets, psi_of, uv_of
 from src.model import PINN
 from src.nondim import SCALES
+from src.sampling import sample_interior
+from src.materials import load_materials
 
 
 def test_slicing_shapes():
@@ -94,3 +96,23 @@ def test_L_IC_runs_on_real_network():
     assert float(L.detach()) > 0.0
     assert L.dtype is torch.float64
     assert set(parts) == {"ic_head", "ic_disp"}
+
+def test_L_PDE_gradients_reach_every_parameter():
+    """Guards create_graph and the .detach() placement in L_PDE."""
+    coll = sample_interior(200)
+    net = PINN(full(), BOUNDS)
+    L, _ = L_PDE(net, coll, load_materials())
+    L.backward()
+    assert all(p.grad is not None and p.grad.abs().sum() > 0
+               for p in net.parameters())
+    
+def test_L_PDE_runs_on_real_network():
+    """End-to-end: finite, positive, float64, per-tag components present."""
+    coll = sample_interior(200)
+    net = PINN(full(), BOUNDS)
+    L, parts = L_PDE(net, coll, load_materials(), per_tag=True)
+    assert torch.isfinite(L)
+    assert float(L.detach()) > 0.0
+    assert L.dtype is torch.float64
+    assert set(parts) == {"pde_richards", "pde_richards_Mk",
+                          "pde_richards_Mk_d", "pde_richards_Tm"}    
