@@ -26,3 +26,4 @@ src/step21_geometry/output/
 src/step21_geometry/figures/
 __pycache__/
 *.pyc
+scratch_pde.py
