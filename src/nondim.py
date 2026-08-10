@@ -23,8 +23,10 @@ defined below. See `report_scales()` for the numerical values.
 Author: <thesis>  |  Phase 1, Step 1.6
 """
 from __future__ import annotations
+
 from dataclasses import dataclass, field, asdict
-import math
+
+from src import properties as P
 
 
 # ---------------------------------------------------------------------------
@@ -45,14 +47,33 @@ class Scales:
     # --- primary scales ---
     L_ref:   float = 170.0        # m     pit depth (characteristic length)
     T_ref:   float = 86_400.0     # s     one day (transient seepage timescale)
-    H_ref:   float = 30.0         # m     max piezometric head above coal seam
+
+    # H_ref: hydrostatic head range over the Section 5 domain (psi_0 = Z_WT - z,
+    # spanning ~0-161 m). REVISED from 30.0, which was the Section 7 confined
+    # head above the coal seam -- a unit that does not exist in Section 5. That
+    # value predated the Day-13 stratigraphic correction. With H_ref ~ L_ref the
+    # ratio Pi_R_grav / Pi_R_diff = L_ref / H_ref -> ~1, so both Richards terms
+    # sit at O(1) with T_ref = 1 day retained and no division-through needed.
+    H_ref:   float = 165.0        # m     hydrostatic head range, Section 5
+
     sig_ref: float = 1.0e6        # Pa    1 MPa (typical overburden stress)
     K_ref:   float = 1.0e-6       # m/s   representative sat. conductivity
     E_ref:   float = 1.0e9        # Pa    representative rock-mass modulus (~1 GPa)
+    # NOTE (open): E_ref contradicts the Phase-1 decision to drop to 100 MPa --
+    # no stratum is near 1 GPa. Affects U_ref and the mechanical residual only.
+    # Must be settled before mechanical_residual is written. See open_items.md.
 
     # --- representative bulk properties (for body-force group only) ---
-    rho_b_ref: float = 1800.0    # kg/m^3, arbitrary O(1) reference (Mk sat = 1946)
-    dtheta_ref: float = 0.33    # theta_s - theta_r, Mk; global scale not per-material
+    rho_b_ref: float = 1800.0     # kg/m^3, arbitrary O(1) reference (Mk sat = 1946)
+
+    # dtheta_ref: theta_s - theta_r for Mk, derived rather than hard-coded so it
+    # cannot drift from the constitutive layer. properties.py carries the
+    # literature theta_s = 0.38 for Mk (NOT the porosity-tie 0.9*n0 = 0.384).
+    # Sits in the denominator of BOTH Richards groups, so it is not cosmetic.
+    dtheta_ref: float = field(
+        default_factory=lambda: P.THETA_S["Mk"] - P.THETA_R["Mk"]
+    )
+
     # --- derived scales (computed in __post_init__ via object.__setattr__) ---
     U_ref: float = field(default=0.0)   # m  displacement scale = sig_ref*L_ref/E_ref
 
@@ -65,6 +86,7 @@ class Scales:
         """Richards diffusion group:  T_ref * K_ref * H_ref / (L_ref^2 * dtheta_ref).
         Multiplies the spatial-diffusion term when time is the leading term."""
         return self.T_ref * self.K_ref * self.H_ref / self.L_ref**2 / self.dtheta_ref
+
     @property
     def Pi_R_grav(self) -> float:
         """Richards gravity/drainage group:  K_ref * T_ref / (L_ref * dtheta_ref)."""
@@ -167,21 +189,25 @@ def effective_stress_nd(sigma_star, psi_star, chi, s: Scales = SCALES):
 # ---------------------------------------------------------------------------
 def report_scales(s: Scales = SCALES) -> str:
     lines = []
-    lines.append("CHARACTERISTIC SCALES (Işıkdere)")
-    lines.append(f"  L_ref   = {s.L_ref:>12.4g} m     (pit depth)")
-    lines.append(f"  T_ref   = {s.T_ref:>12.4g} s     (1 day)")
-    lines.append(f"  H_ref   = {s.H_ref:>12.4g} m     (head above coal seam)")
-    lines.append(f"  sig_ref = {s.sig_ref:>12.4g} Pa    (1 MPa overburden)")
-    lines.append(f"  K_ref   = {s.K_ref:>12.4g} m/s   (sat. conductivity)")
-    lines.append(f"  E_ref   = {s.E_ref:>12.4g} Pa    (rock-mass modulus)")
-    lines.append(f"  U_ref   = {s.U_ref:>12.4g} m     (= sig_ref*L_ref/E_ref)")
+    lines.append("CHARACTERISTIC SCALES (Işıkdere, Section 5)")
+    lines.append(f"  L_ref      = {s.L_ref:>12.4g} m     (pit depth)")
+    lines.append(f"  T_ref      = {s.T_ref:>12.4g} s     (1 day)")
+    lines.append(f"  H_ref      = {s.H_ref:>12.4g} m     (hydrostatic head range)")
+    lines.append(f"  sig_ref    = {s.sig_ref:>12.4g} Pa    (1 MPa overburden)")
+    lines.append(f"  K_ref      = {s.K_ref:>12.4g} m/s   (sat. conductivity)")
+    lines.append(f"  E_ref      = {s.E_ref:>12.4g} Pa    (rock-mass modulus)")
+    lines.append(f"  U_ref      = {s.U_ref:>12.4g} m     (= sig_ref*L_ref/E_ref)")
+    lines.append(f"  rho_b_ref  = {s.rho_b_ref:>12.4g} kg/m3")
+    lines.append(f"  dtheta_ref = {s.dtheta_ref:>12.4g} -     "
+                 f"(Mk: theta_s {P.THETA_S['Mk']:.4g} - theta_r {P.THETA_R['Mk']:.4g})")
     lines.append("")
     lines.append("DIMENSIONLESS GROUPS")
-    lines.append(f"  Pi_R_diff  = T*K*H/(L^2*dth)     = {s.Pi_R_diff:.4e}")
-    lines.append(f"  Pi_R_grav  = K*T/(L*dth)         = {s.Pi_R_grav:.4e}")
-    lines.append(f"  Pi_R_hz    = H/L          = {s.Pi_R_hz:.4e}")
-    lines.append(f"  Pi_M_body  = rho*g*L/sig  = {s.Pi_M_body:.4e}")
-    lines.append(f"  Pi_M_couple= rho_w*g*H/sig= {s.Pi_M_couple:.4e}")
+    lines.append(f"  Pi_R_diff  = T*K*H/(L^2*dth) = {s.Pi_R_diff:.4e}")
+    lines.append(f"  Pi_R_grav  = K*T/(L*dth)     = {s.Pi_R_grav:.4e}")
+    lines.append(f"  ratio grav/diff = L/H        = {s.Pi_R_grav / s.Pi_R_diff:.4f}")
+    lines.append(f"  Pi_R_hz    = H/L             = {s.Pi_R_hz:.4e}")
+    lines.append(f"  Pi_M_body  = rho*g*L/sig     = {s.Pi_M_body:.4e}")
+    lines.append(f"  Pi_M_couple= rho_w*g*H/sig   = {s.Pi_M_couple:.4e}")
     return "\n".join(lines)
 
 

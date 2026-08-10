@@ -99,3 +99,10 @@ of a constant that properties.py defines authoritatively.
       no row for this unit. Confirmed intentional (properties.py:5-6,
       Tm postdates the Phase-1 dataset). Must be declared in methods
       and carried as a Phase 5 sensitivity variable.
+
+      ## Step 3.2 (10 Aug)
+- [x] config.BOUNDS covered elevation 0-200 m, i.e. below the domain
+      floor, so PINN._scale mapped z to [+0.99, +2.65] and x to
+      [-1, -0.23]. Input normalisation was actively making conditioning
+      worse. Now a cached snapshot of bounds_from_geometry(), enforced
+      by tests/test_bounds.py.

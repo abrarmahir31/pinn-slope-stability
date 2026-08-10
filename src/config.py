@@ -1,3 +1,4 @@
+from src.nondim import SCALES
 from dataclasses import dataclass
 
 @dataclass
@@ -18,9 +19,9 @@ class NetConfig:
 # Dimensionless domain bounds (L_ref = 170 m, T_ref = 86400 s)
 # TODO: source these from geometry.py once Z_BASE and X_MK_DIVIDE are settled
 BOUNDS = {
-    "x_min": 0.0,   "x_max": 1.577,   # 268.05 m / 170
-    "z_min": 1.173, "z_max": 2.106,   # 199.47-357.97 m / 170
-    "t_min": 0.0,   "t_max": 30.0,    # 30 days
+    "x_min": -0.0022114108801415335,  "x_max": 1.577,   # -0.38 .. 268.05 m / 170
+    "z_min": 1.173,  "z_max": 2.106,   # 199.47-357.97 m / 170
+    "t_min": 0.0,    "t_max": 30.0,    # 30 days
 }
 
 
@@ -40,3 +41,11 @@ def resolve_device(requested: str) -> str:
     if requested == "cuda" and not torch.cuda.is_available():
         return "cpu"
     return requested
+
+
+def bounds_from_geometry(t_max=30.0, s=SCALES) -> dict:
+    from src.sampling import domain_bbox
+    x0, x1, z0, z1 = domain_bbox()
+    return {"x_min": x0/s.L_ref, "x_max": x1/s.L_ref,
+            "z_min": z0/s.L_ref, "z_max": z1/s.L_ref,
+            "t_min": 0.0, "t_max": t_max}
