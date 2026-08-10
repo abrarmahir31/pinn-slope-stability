@@ -183,6 +183,34 @@ def effective_stress_nd(sigma_star, psi_star, chi, s: Scales = SCALES):
     """
     return sigma_star - s.Pi_M_couple * chi * psi_star
 
+def darcy_flux_nd(K_star, dpsi_dx_star, dpsi_dz_star, s: Scales = SCALES):
+    """Dimensionless Darcy flux, consistent with richards_residual_nd.
+
+        q* = -( Pi_R_diff * K* grad* psi*  +  Pi_R_grav * K* e_z )
+
+    Built so that
+
+        div* q*  +  C* dpsi*/dt*   ==   richards_residual_nd(...)
+
+    exactly, term for term. That identity is the first assertion in
+    tests/test_interface.py, and it is what stops the interface loss and the
+    interior loss from enforcing two slightly different physics.
+
+    The z-component groups as
+
+        q*_z = -Pi_R_grav * K* * ( Pi_R_hz * dpsi*/dz*  +  1 )
+
+    so a hydrostatic field (dpsi/dz = -1, i.e. dpsi*/dz* = -1/Pi_R_hz) gives
+    exactly zero flux. This relies on Pi_R_diff / Pi_R_grav == Pi_R_hz. If
+    H_ref is ever dropped from Pi_R_diff again, the identity breaks and the
+    hydrostatic test fails loudly instead of quietly rescaling gravity.
+
+    Returns (q*_x, q*_z).
+    """
+    qx = -s.Pi_R_diff * K_star * dpsi_dx_star
+    qz = -(s.Pi_R_diff * K_star * dpsi_dz_star + s.Pi_R_grav * K_star)
+    return qx, qz
+
 
 # ---------------------------------------------------------------------------
 # 5. Reporting

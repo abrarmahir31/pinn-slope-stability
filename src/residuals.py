@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 src/residuals.py — PDE residuals, autograd layer only.
 ======================================================
@@ -20,12 +21,10 @@ analytic field can be pushed through exactly the same code path as the network.
 That is what makes the hydrostatic test in tests/test_richards_hydrostatic.py
 a test of the residual rather than a test of the network.
 """
-
-from __future__ import annotations
+from src.nondim import SCALES, Scales, richards_residual_nd, darcy_flux_nd
 
 from dataclasses import dataclass
 from typing import Callable, Mapping, Sequence
-
 import torch 
 from torch import Tensor 
 
@@ -37,6 +36,8 @@ __all__ = [
     "swcc_from_material",
     "richards_residual",
     "richards_residual_expanded",
+    "darcy_flux",
+    "interface_flux_jump",
 ]
 
 
@@ -208,6 +209,45 @@ def richards_residual_expanded(fields, x: Tensor, z: Tensor, t: Tensor, mat,
     dK_dz = dK_dpsi * dpsi_dz
 
     return richards_residual_nd(C, dpsi_dt, div_Kgrad, dK_dz, s)
+
+def darcy_flux(fields, x, z, t, mat, s: Scales = SCALES):
+    """Dimensionless Darcy flux (q*_x, q*_z) at the given points.
+
+    Same convention as richards_residual: `fields` is a CALLABLE, not a PINN,
+    so analytic test fields go through the identical path.
+
+    `mat` selects which stratum's SWCC is used. At an interface that is the
+    whole point -- the two sides disagree.
+    """
+    psi = _psi_of(fields(x, z, t))
+    swcc = _as_swcc(mat, s)
+    K = swcc.K_star(psi)
+    return darcy_flux_nd(K, grad(psi, x), grad(psi, z), s)
+
+
+def interface_flux_jump(fields, x, z, t, mat_a, mat_b, nx, nz,
+                        s: Scales = SCALES):
+    """Normal-flux discontinuity across a material contact: [[q*.n]].
+
+    A single network gives psi continuity across the contact for free -- there
+    is only one psi field. What it does NOT give is mass conservation ACROSS
+    the contact. K_s spans ~3 orders between Mk, Mk_d and Tm, so
+    q = -K(psi)(grad psi + e_z) is discontinuous for any psi the optimiser can
+    reach unless grad psi compensates by exactly the K ratio.
+
+    Nothing currently makes it. The cheapest solution available to the network
+    is to let mass leak across the boundary, and the interior residual cannot
+    see it: both sides are individually satisfied while the pair is not. The
+    symptom in a trained model is a wetting front that stalls or accelerates
+    at a stratum contact for no physical reason.
+
+    Both fluxes are evaluated at the SAME (x, z, t) with the SAME psi, so the
+    jump is purely the constitutive difference. (nx, nz) is the unit normal to
+    the contact; its sign is irrelevant because the loss squares this.
+    """
+    qa_x, qa_z = darcy_flux(fields, x, z, t, mat_a, s)
+    qb_x, qb_z = darcy_flux(fields, x, z, t, mat_b, s)
+    return (qa_x - qb_x) * nx + (qa_z - qb_z) * nz
 
 
 # ---------------------------------------------------------------------------
