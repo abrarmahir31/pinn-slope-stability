@@ -93,24 +93,24 @@ K_SAT = {"Mk": 1.0e-9, "Mk_d": 1.0e-9, "Tm": 3.13e-6}
 INFILTRATION_MODE = "capacity_limited"   # "raw" | "capacity_limited"
 
 
-def infiltration_capacity(x, z):
+def infiltration_capacity(x, z, tag=None):
     """Maximum normal flux the ground can accept at (x, z), m/s.
 
-    Darcy caps infiltration at K(psi) <= K_s. Prescribing more than this makes
-    the boundary condition unsatisfiable: no psi field exists that conducts
-    5560x the saturated conductivity of marl, so L_BC would plateau at a floor
-    set by an unphysical target rather than by convergence.
+    `tag` may be supplied by a caller that already knows the material. Points
+    sampled ON the boundary are exactly on inside_domain's test surface, so a
+    coordinate round-trip through the non-dimensionalisation (x -> x/L_ref ->
+    x) moves them by ~1e-16 and material_tag returns "outside" for a fraction
+    of them. The sampler computed the tag once, from the original physical
+    coordinates; reusing it is both correct and cheaper.
 
-    K_s is the ceiling (reached only at psi = 0). Using K_s rather than
-    K(psi) keeps this a fixed target instead of a solution-dependent one --
-    the psi-dependent version is the complementarity BC below, deferred with
-    the seepage face for the same reason.
+    [... rest of the existing docstring ...]
     """
-    tag = g.material_tag(np.asarray(x, float), np.asarray(z, float))
+    if tag is None:
+        tag = g.material_tag(np.asarray(x, float), np.asarray(z, float))
     return np.array([K_SAT[str(t)] for t in np.atleast_1d(tag)])
 
 
-def flux_bc(segment, pts):
+def flux_bc(segment, pts, tag=None):
     """Prescribed normal flux q.n (m/s). POSITIVE = into the domain.
 
     On rainfall segments the applied flux is min(rain . n, K_s). The rest is
@@ -130,7 +130,7 @@ def flux_bc(segment, pts):
         q_rain = RAIN_FLUX * nrm[:, 1]
         if INFILTRATION_MODE == "raw":
             return q_rain
-        return np.minimum(q_rain, infiltration_capacity(pts[:, 0], pts[:, 1]))
+        return np.minimum(q_rain, infiltration_capacity(pts[:, 0], pts[:, 1], tag=tag))
     if segment in ("pit_floor", "base"):
         return np.zeros(len(pts))
     if segment == "cut_face" and SEEPAGE_FACE_MODE == "noflow":

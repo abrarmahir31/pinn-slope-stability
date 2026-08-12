@@ -62,17 +62,13 @@ T_MAX_DAYS = 30.0       # t* upper bound; the rainfall window, still contested
 
 @dataclass
 class Collocation:
-    """A point set in DIMENSIONLESS coordinates, ready for residuals.py.
-
-    x, z, t : leaf tensors (N, 1), requires_grad=True
-    w       : per-point weight (N, 1), mean 1.0, no grad
-    tag     : numpy array of material tags, for diagnostics and per-unit loss
-    """
-    x: Tensor
-    z: Tensor
-    t: Tensor
-    w: Tensor
+    x: torch.Tensor
+    z: torch.Tensor
+    t: torch.Tensor
+    w: torch.Tensor
     tag: np.ndarray
+    nx: torch.Tensor | None = None      # outward unit normal, boundary sets only
+    nz: torch.Tensor | None = None
 
     def __len__(self) -> int:
         return self.x.shape[0]
@@ -197,6 +193,29 @@ def sample_interior(n: int = 20000, seed: int = 20260808,
     wt = torch.as_tensor(w, dtype=xt.dtype).reshape(-1, 1)
     return Collocation(x=xt, z=zt, t=tt, w=wt, tag=tag)
 
+def _segment_normal(seg: str, pts: np.ndarray) -> np.ndarray:
+    """(N,2) outward unit normals, from PHYSICAL coordinates.
+
+    Three segments follow the ground surface and need the differentiated
+    normal; three are straight and have constant normals. Written out per
+    segment rather than inferred, because a sign error here is invisible in
+    the loss -- it turns an inflow condition into an outflow one and trains
+    perfectly well.
+
+    Unit vectors are scale-invariant, so no non-dimensionalisation is needed.
+    But outward_normal differentiates z_ground with respect to x, so it must
+    be handed physical x, not x/L_ref.
+    """
+    n = len(pts)
+    if seg in ("natural_ground", "bench", "cut_face"):
+        return bnd.outward_normal(g.z_ground, pts[:, 0])
+    if seg == "base":            # domain floor, outward is -z
+        return np.column_stack([np.zeros(n), -np.ones(n)])
+    if seg == "pit_floor":       # vertical pit wall at x = 0, outward is -x
+        return np.column_stack([-np.ones(n), np.zeros(n)])
+    if seg == "far_field_f1":    # F1 plane, outward is +x
+        return np.column_stack([np.ones(n), np.zeros(n)])
+    raise ValueError(f"no outward normal defined for segment {seg!r}")
 
 def sample_boundary(n: int = 2000, seed: int = 0, t_max: float = T_MAX_DAYS,
                     s: Scales = SCALES) -> dict[str, Collocation]:
@@ -215,7 +234,12 @@ def sample_boundary(n: int = 2000, seed: int = 0, t_max: float = T_MAX_DAYS,
         xt, zt, tt = as_inputs(pts[:, 0] / s.L_ref, pts[:, 1] / s.L_ref, t)
         wt = torch.ones_like(xt)
         tag = np.asarray(g.material_tag(pts[:, 0], pts[:, 1])).astype(str)
-        out[seg] = Collocation(x=xt, z=zt, t=tt, w=wt, tag=tag)
+        nrm = _segment_normal(seg, pts)
+        out[seg] = Collocation(
+            x=xt, z=zt, t=tt, w=wt, tag=tag,
+            nx=torch.as_tensor(nrm[:, 0], dtype=xt.dtype).reshape(-1, 1),
+            nz=torch.as_tensor(nrm[:, 1], dtype=xt.dtype).reshape(-1, 1),
+        )
     return out
 
 

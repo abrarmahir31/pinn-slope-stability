@@ -10,11 +10,13 @@ mutation-tested Richards path untouched.
 
 from __future__ import annotations
 
-import torch # type: ignore
+import numpy as np
+import torch  # type: ignore
 
 from src.nondim import SCALES, Scales
-from src.residuals import richards_residual
+from src.residuals import richards_residual, darcy_flux
 from src.sampling import load_initial
+from src.step21_geometry import boundaries as bnd
 
 
 def psi_of(out: torch.Tensor) -> torch.Tensor:
@@ -127,3 +129,103 @@ def L_PDE(net, coll, mats, s: Scales = SCALES, normalise: str = "none",
 
     pde = total / wsum
     return pde, {"pde_richards": pde.detach(), **parts}
+
+# Segment -> condition type. Explicit, not inferred: every segment is named
+# exactly once, so adding a seventh is a KeyError rather than a silent skip.
+_BC_KIND = {
+    "natural_ground": "flux",
+    "bench":          "flux",
+    "cut_face":       "flux",      # zero while SEEPAGE_FACE_MODE == "noflow"
+    "pit_floor":      "flux",      # zero: water table is below the domain
+    "base":           "flux",      # zero
+    "far_field_f1":   "dirichlet",
+}
+
+
+def L_BC(net, bcs, mats, s: Scales = SCALES, per_segment: bool = False):
+    """Boundary loss over the six segments. Hydraulic only.
+
+    bcs : {segment -> Collocation}, from sample_boundary. Requires nx/nz.
+    mats: {tag -> Material}, as L_PDE.
+
+    SIGN CONVENTION -- the one thing to get right here.
+        boundaries.flux_bc returns POSITIVE = INTO the domain.
+        darcy_flux returns q*, and n is the OUTWARD normal, so q*.n is
+        positive OUT of the domain.
+        The target is therefore  q*.n = -q_prescribed*.
+        Dropping that minus sign makes rainfall drain the slope instead of
+        wetting it. The loss still converges; the physics is inverted.
+
+    Accumulates squared residuals and divides by the GLOBAL weight sum, the
+    same convention as L_PDE. Segments therefore contribute in proportion to
+    their point count. Since sample_boundaries allocates n, n//4, n//3, n//2
+    by segment, that weighting is a CHOICE inherited from the sampler, not a
+    physical statement -- record it in the decision log and revisit if the
+    far-field condition turns out to dominate.
+    """
+    fields = _psi_field(net)
+    total = None
+    wsum = 0.0
+    parts = {}
+
+    for seg, coll in bcs.items():
+        if seg not in _BC_KIND:
+            raise KeyError(
+                f"L_BC: segment {seg!r} has no condition type. "
+                f"Known: {sorted(_BC_KIND)}")
+        kind = _BC_KIND[seg]
+        w = coll.w.detach()
+
+        if kind == "dirichlet":
+            # psi prescribed on F1: hydrostatic w.r.t. a water table at Z_WT,
+            # which lies BELOW the domain, so this is negative everywhere.
+            # fields() already yields (N,1) psi* -- see _psi_field.
+            z_phys = (coll.z * s.L_ref).detach().cpu().numpy().ravel()
+            psi_target = torch.as_tensor(
+                bnd.psi_far_field(z_phys) / s.H_ref,
+                dtype=coll.x.dtype, device=coll.x.device).reshape(-1, 1)
+            R = fields(coll.x, coll.z, coll.t) - psi_target
+
+        else:
+            if coll.nx is None or coll.nz is None:
+                raise ValueError(
+                    f"L_BC: segment {seg!r} carries no normals. Rebuild the "
+                    f"boundary set with the current sample_boundary.")
+
+            # Prescribed flux, per point, in m/s. Positive = into the domain.
+            # Goes through boundaries.flux_bc so the K_s capacity cap applies
+            # here exactly as it does in the geometry layer -- one source of
+            # truth for what the ground can actually accept.
+            pts = np.column_stack([
+                (coll.x * s.L_ref).detach().cpu().numpy().ravel(),
+                (coll.z * s.L_ref).detach().cpu().numpy().ravel()])
+            q_in = bnd.flux_bc(seg, pts, tag=coll.tag) / s.Q_ref
+            q_target = torch.as_tensor(
+                -q_in, dtype=coll.x.dtype,
+                device=coll.x.device).reshape(-1, 1)        # outward-positive
+
+            # Split by material tag: darcy_flux takes ONE material, and K_s
+            # spans three orders across the strata. Same reasoning as L_PDE.
+            R = torch.zeros_like(coll.x)
+            for tag in sorted(set(coll.tag.tolist())):
+                if tag not in mats:
+                    raise KeyError(
+                        f"L_BC: boundary tag {tag!r} on segment {seg!r} has "
+                        f"no entry in mats. Present: {sorted(mats)}")
+                m = torch.as_tensor(coll.tag == tag, device=coll.x.device)
+                idx = torch.as_tensor(
+                    np.flatnonzero(coll.tag == tag),
+                    dtype=torch.long, device=coll.x.device)
+                qx, qz = darcy_flux(fields, coll.x[idx], coll.z[idx],
+                                    coll.t[idx], mats[tag], s)
+                qn = qx * coll.nx[idx] + qz * coll.nz[idx]
+                R = R.index_copy(0, idx, qn - q_target[idx])
+
+        contrib = (w * R.pow(2)).sum()
+        total = contrib if total is None else total + contrib
+        wsum += w.sum().item()
+        if per_segment:
+            parts[f"bc_{seg}"] = (contrib / w.sum()).detach()
+
+    bc = total / wsum
+    return bc, {"bc": bc.detach(), **parts}

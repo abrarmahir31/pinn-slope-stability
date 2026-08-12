@@ -96,6 +96,27 @@ class Scales:
     def Pi_R_hz(self) -> float:
         """Head-vs-length ratio H_ref / L_ref (appears in the (psi + z) term)."""
         return self.H_ref / self.L_ref
+    @property
+    def Q_ref(self) -> float:
+        """Flux scale, m/s.  q* = q / Q_ref = q * T_ref / (L_ref * dtheta_ref).
+
+        Derived from the residual, not chosen. The gravity term of
+        darcy_flux_nd is
+
+            q*_z,grav = -Pi_R_grav * K*
+                      = -(K_ref T_ref / (L_ref dtheta_ref)) (K / K_ref)
+                      = -K * T_ref / (L_ref dtheta_ref)
+
+        against a physical q_grav = -K, so q* = q * T_ref/(L_ref dtheta_ref).
+        The diffusion term reduces to the same factor -- that agreement is the
+        check that this is the flux scale implied by the non-dimensionalisation
+        rather than an independent guess. tests/test_loss_bc.py asserts it.
+
+        Note this is NOT K_ref. A prescribed flux divided by K_ref would be
+        wrong by T_ref K_ref / (L_ref dtheta_ref) = Pi_R_grav, i.e. by orders
+        of magnitude, and would train to a smooth, confidently wrong answer.
+        """
+        return self.L_ref * self.dtheta_ref / self.T_ref
 
     @property
     def Pi_M_body(self) -> float:
