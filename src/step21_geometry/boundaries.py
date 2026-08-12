@@ -83,18 +83,60 @@ def psi_far_field(z):
     return -(np.asarray(z, float) - Z_WT)
 
 
+# Saturated conductivity per stratum, m/s. Imported rather than restated --
+# see properties.py / materials.py for provenance.
+#   Mk    1.00e-09   0.004 mm/hr
+#   Mk_d  1.00e-09   0.004 mm/hr   (marl analog; see open_items.md)
+#   Tm    3.13e-06  11.268 mm/hr
+K_SAT = {"Mk": 1.0e-9, "Mk_d": 1.0e-9, "Tm": 3.13e-6}
+
+INFILTRATION_MODE = "capacity_limited"   # "raw" | "capacity_limited"
+
+
+def infiltration_capacity(x, z):
+    """Maximum normal flux the ground can accept at (x, z), m/s.
+
+    Darcy caps infiltration at K(psi) <= K_s. Prescribing more than this makes
+    the boundary condition unsatisfiable: no psi field exists that conducts
+    5560x the saturated conductivity of marl, so L_BC would plateau at a floor
+    set by an unphysical target rather than by convergence.
+
+    K_s is the ceiling (reached only at psi = 0). Using K_s rather than
+    K(psi) keeps this a fixed target instead of a solution-dependent one --
+    the psi-dependent version is the complementarity BC below, deferred with
+    the seepage face for the same reason.
+    """
+    tag = g.material_tag(np.asarray(x, float), np.asarray(z, float))
+    return np.array([K_SAT[str(t)] for t in np.atleast_1d(tag)])
+
+
 def flux_bc(segment, pts):
-    """Prescribed normal flux q.n (m/s). POSITIVE = into the domain."""
-    if segment in ("natural_ground", "bench"):
+    """Prescribed normal flux q.n (m/s). POSITIVE = into the domain.
+
+    On rainfall segments the applied flux is min(rain . n, K_s). The rest is
+    runoff.
+
+    This is NOT a numerical convenience. At 20 mm/hr against marl at
+    0.004 mm/hr, 99.98 per cent of the rain runs off; the uncapped condition
+    asks the marl surface to conduct 5560x its saturated conductivity. On Tm
+    the ratio is 1.8x, so roughly 56 per cent infiltrates. Capping changes
+    which stratum drives the infiltration response, and that belongs in the
+    methods section, not in a comment.
+
+    Set INFILTRATION_MODE = "raw" to recover the old behaviour for comparison.
+    """
+    if segment in ("natural_ground", "bench", "cut_face_rain"):
         nrm = outward_normal(g.z_ground, pts[:, 0])
-        return RAIN_FLUX * nrm[:, 1]
+        q_rain = RAIN_FLUX * nrm[:, 1]
+        if INFILTRATION_MODE == "raw":
+            return q_rain
+        return np.minimum(q_rain, infiltration_capacity(pts[:, 0], pts[:, 1]))
     if segment in ("pit_floor", "base"):
         return np.zeros(len(pts))
     if segment == "cut_face" and SEEPAGE_FACE_MODE == "noflow":
         return np.zeros(len(pts))
     raise ValueError(segment + " is not a flux boundary in mode " +
                      SEEPAGE_FACE_MODE)
-
 
 def fischer_burmeister(psi, qn, eps=1e-6):
     """Smooth complementarity residual for the seepage face.
@@ -120,23 +162,27 @@ def mechanical_bc(segment):
 # ============================ MECHANICAL BOUNDARY DATA =======================
 # Elastic constants, Hoek-Diederichs (2006):
 #   E_rm = E_i (0.02 + (1 - D/2)/(1 + exp((60 + 15D - GSI)/11))),  E_i = MR*sig_ci
-#   Mk    MR 400, sig_ci 17.9 MPa, GSI 50  ->  478 MPa    (Step 1.3)
-#   Mk_d  MR 400, sig_ci 4.29 MPa, GSI 45  ->  86.5 MPa   (Step 1.3)
+#   Mk    MR 175, sig_ci 17.9 MPa, GSI 50  ->  209 MPa    (Step 1.3)
+#   Mk_d  MR 175, sig_ci 4.29 MPa, GSI 45  ->  38.1 MPa   (Step 1.3)
 #   Tm    MR 500, sig_ci 70.0 MPa, GSI 60  ->  4264 MPa   DERIVED HERE --
 #         Step 1.3 predates the identification of Tm as basement limestone.
 #         MR 500 is Hoek's crystalline-limestone value; sig_ci 70 MPa is the
 #         same literature estimate as geometry.SIG_CI. Sensitivity, not fact.
 
-E_RM = {"Mk": 4.78e8, "Mk_d": 8.65e7, "Tm": 4.264e9}   # Pa
-NU   = {"Mk": 0.28,   "Mk_d": 0.30,   "Tm": 0.25}
+# Elastic constants come from properties.py (single source of truth), which
+# reads the Phase-1 dataset: Hoek-Diederichs with MR_adopted = 175 for both
+# marls, MR 500 for Tm. The MR 400 figures previously hardcoded here were
+# never in the derivation pipeline -- 4.78e8 vs the dataset's 2.089e8 for Mk,
+# a 2.29x discrepancy that existed only in this file's comment block.
 
 try:
-    from src.properties import RHO_DRY as RHO   # dry density, kg/m3
+    from src.properties import E as E_RM, NU, RHO_DRY as RHO
 except ModuleNotFoundError:
     import sys, pathlib
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
-    from src.properties import RHO_DRY as RHO
-K0   = {k: v / (1.0 - v) for k, v in NU.items()}
+    from src.properties import E as E_RM, NU, RHO_DRY as RHO
+
+K0 = {k: v / (1.0 - v) for k, v in NU.items()}
 
 G_ACC = 9.81
 RHO_W = 1000.0

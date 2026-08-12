@@ -106,3 +106,26 @@ of a constant that properties.py defines authoritatively.
       [-1, -0.23]. Input normalisation was actively making conditioning
       worse. Now a cached snapshot of bounds_from_geometry(), enforced
       by tests/test_bounds.py.
+
+      ## Step 2.2 mechanical checks (closed 10 Aug)
+- [x] 13_mech_checks.py exit code fixed; script now gates properly.
+- [x] Mk_d body force: assertion's expected value was wrong, not the code.
+- [x] sigma_v at crest: 142388 vs 142388 Pa exact (was 156022 vs 142412,
+      +9.6%). The computed value was wrong -- unit misassigned near the
+      crest. Step 2.2 complete; mechanical IC no longer blocks the
+      gravity warm-up.
+
+      ## Step 1.6 (closed 10 Aug)
+- [x] DECISION: Richards residual scaling. RESOLVED, and the premise was
+      wrong. H_ref = 30 m was the Section 7 confined head above the coal
+      seam — a unit absent from Section 5, set before the Day-13
+      stratigraphic correction. Section 5's head scale is the hydrostatic
+      IC range (psi_0 = Z_WT - z, ~0-161 m), so H_ref = 165.
+      Pi_R_diff 1.4948e-03, Pi_R_grav 1.5401e-03, ratio L/H = 1.0303.
+      Both terms O(1) with T_ref = 1 day retained. No division-through,
+      no T_ref = L^2/K.
+- [x] CHECK 2 "rebalanced" block: superseded. L/H was never a geometric
+      constraint, just a mismatched reference pair.
+- [x] dtheta_ref provenance: it IS the literature Mk theta_s 0.38 - 0.05.
+      Now derived from properties.THETA_S/THETA_R rather than a literal.
+      The 0.377 figure in the old note (theta_s := n0) was stale.
