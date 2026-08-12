@@ -273,6 +273,151 @@ def load_initial(path: str = "src/step21_geometry/ic_cache.npz",
     return Collocation(x=xt, z=zt, t=tt, w=wt, tag=tag), targets
 
 
+# ===========================================================================
+# Interface sampling -- the Mk|Tm and Mk_d|Tm contacts along z_tm_top(x).
+#
+# Mk|Mk_d is NOT sampled: it carries no flux discontinuity while the two marls
+# share K_s, alpha and n (Phase-1 `vg_basis: "marl analog"`).
+# `test_mk_and_mk_d_are_hydraulically_identical` guards that assumption; if it
+# ever fails, a third contact belongs here.
+#
+# Tm is always the LOWER material at this contact, so the dict key carries both
+# sides -- "mk_tm" means Mk above, Tm below -- and `Collocation.tag` holds the
+# UPPER material only. Nothing downstream should infer the lower side from
+# geometry; it is Tm by construction of this sampler.
+# ===========================================================================
+
+INTERFACE_EPS_M = 0.10      # m, offset used to identify the material each side
+_TRACE_DX_M = 0.01          # m, central-difference step for the trace slope
+
+CONTACTS = {"mk_tm": "Mk", "mkd_tm": "Mk_d"}
+
+
+
+# --- ADAPTER -------------------------------------------------------------
+# `sample_boundary` already builds Collocation tensors somehow. If it has
+# equivalents of these two, DELETE these and call those instead -- two ways of
+# making a leaf tensor in one module is how dtype drift starts.
+def _iface_leaf(a):
+    """(N,) float array -> (N,1) leaf tensor requiring grad."""
+    return torch.as_tensor(np.asarray(a, float), dtype=torch.float64
+                           ).reshape(-1, 1).requires_grad_(True)
+
+
+def _iface_col(a):
+    """(N,) float array -> (N,1) tensor, no grad."""
+    return torch.as_tensor(np.asarray(a, float), dtype=torch.float64).reshape(-1, 1)
+
+
+def _tm_top_slope(x_phys):
+    """dz/dx of the top-of-Tm trace, central difference (physical metres).
+
+    The trace is piecewise-linear between digitised points, so this is exact
+    away from the nodes and averages the two limbs at them. It is discontinuous
+    at x = 90/91 where `d_mk_tm` and `d_mkd_base` tile (finding 4); that seam
+    sits inside the Mk|Tm contact, ~0.7 m from X_MK_DIVIDE.
+    """
+    x = np.asarray(x_phys, float)
+    h = _TRACE_DX_M
+    return (g.z_tm_top(x + h) - g.z_tm_top(x - h)) / (2.0 * h)
+
+
+def _tm_top_normal(x_phys):
+    """Unit normal to z_tm_top, pointing UP -- out of Tm, into the marl.
+
+    Returns (nx, nz). Sign convention matters: `interface_flux_jump` compares
+    q.n evaluated with the SAME normal on both sides, so flipping this flips
+    the sign of the jump.
+    """
+    dz = _tm_top_slope(x_phys)
+    norm = np.hypot(dz, 1.0)
+    return -dz / norm, np.ones_like(dz) / norm
+
+
+def _arclength_x(f, x0, x1, n, rng, m=2000):
+    """Sample x so points are uniform along ARC LENGTH of z = f(x).
+
+    Uniform-in-x would under-resolve the steep limbs of the contact. Same
+    approach as `boundaries._arclength_sample`, but returns x only.
+    """
+    xs = np.linspace(x0, x1, m)
+    zs = f(xs)
+    s = np.concatenate([[0.0], np.cumsum(np.hypot(np.diff(xs), np.diff(zs)))])
+    return np.interp(rng.uniform(0.0, s[-1], n), s, xs)
+
+
+def _contact_x_range(upper, margin=1.0):
+    """[x0, x1] over which this contact exists inside the domain.
+
+    Excludes x where the contact has risen to within `margin` of the ground
+    surface (it does not outcrop in Section 5, but the digitised traces
+    approach each other near the pit) and where it has passed beyond F1.
+    """
+    lo = g.X_MIN if upper == "Mk" else g.X_MK_DIVIDE
+    hi = g.X_MK_DIVIDE if upper == "Mk" else g.X_MAX
+
+    xs = np.linspace(lo, hi, 4000)
+    zt = g.z_tm_top(xs)
+    ok = (zt < g.z_ground(xs) - margin) & (zt >= g.Z_BASE) & (xs <= g.x_f1(zt))
+    if not ok.any():
+        raise ValueError(f"no valid {upper}|Tm contact in x = [{lo}, {hi}]")
+    return float(xs[ok].min()), float(xs[ok].max())
+
+
+def sample_interfaces(n: int = 500, seed: int = 0, t_max: float = T_MAX_DAYS,
+                      s: Scales = SCALES) -> dict[str, Collocation]:
+    """Collocation sets on the Mk|Tm and Mk_d|Tm contacts.
+
+    Returns {"mk_tm": Collocation, "mkd_tm": Collocation}, keyed by contact to
+    match `sample_boundary`, so `L_interface` can report per-contact parts.
+
+    `n` is per contact. Geometry is queried ONCE, here: tags and normals travel
+    with the Collocation and must never be recomputed in the torch layer, where
+    the x -> x/L_ref -> x round trip moves points by ~1e-16 and `material_tag`
+    starts returning "outside" on curved traces.
+    """
+    rng = np.random.default_rng(seed)
+    out = {}
+
+    for key, upper in CONTACTS.items():
+        x0, x1 = _contact_x_range(upper)
+        x = _arclength_x(g.z_tm_top, x0, x1, n, rng)
+        z = g.z_tm_top(x)
+
+        # Identify the material each side. This is the check that the trace and
+        # `material_tag` agree; disagreement means the tiling seam or
+        # X_MK_DIVIDE has moved, not that a point is merely awkward.
+        eps = INTERFACE_EPS_M
+        tag_up = g.material_tag(x, z + eps)
+        tag_dn = g.material_tag(x, z - eps)
+        keep = (tag_up == upper) & (tag_dn == "Tm")
+        if keep.mean() < 0.98:
+            raise ValueError(
+                f"{key}: only {100 * keep.mean():.1f}% of sampled points have "
+                f"{upper} above and Tm below. The trace and material_tag "
+                f"disagree -- check X_MK_DIVIDE against the d_mk_tm/d_mkd_base "
+                f"tiling at x = 90/91."
+            )
+        x, z = x[keep], z[keep]
+
+        nx, nz = _tm_top_normal(x)
+        t = rng.uniform(0.0, t_max, len(x))
+        w = np.ones(len(x))          # arc-length sampling already sets density
+
+        # t_max is in days and T_ref = 86400 s, so t* = t_days directly.
+        out[key] = Collocation(
+            x=_iface_leaf(x / s.L_ref),
+            z=_iface_leaf(z / s.L_ref),
+            t=_iface_leaf(t),
+            w=_iface_col(w),
+            tag=np.full(len(x), upper),
+            nx=_iface_col(nx),
+            nz=_iface_col(nz),
+        )
+
+    return out
+
+
 if __name__ == "__main__":
     print("bbox (x0, x1, z0, z1):", tuple(round(v, 2) for v in domain_bbox()))
     c = sample_interior(5000)
