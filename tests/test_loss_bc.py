@@ -292,7 +292,7 @@ def test_total_is_globally_weighted_while_parts_are_per_segment_means(
     assert float(total.detach()) == pytest.approx(expected_total, rel=1e-9)
 
     naive = sum(PART(parts, s) for s in bcs)
-    assert naive != pytest.approx(float(total.detach()), rel=1e-3), (
+    assert naive != pytest.approx(float(total.detach()), rel=1e-3, abs=1e-40), (
         "parts appear to sum to the total; the two normalisations have "
         "converged and one of them changed"
     )
@@ -492,7 +492,7 @@ def test_sign_convention_is_not_reversible(bcs, W_global, segment):
 
     assert got == pytest.approx(assemble_part(coll, r_correct),
                                 rel=1e-9, abs=1e-30)
-    assert got != pytest.approx(assemble_part(coll, r_flipped), rel=1e-2)
+    assert got != pytest.approx(assemble_part(coll, r_flipped), rel=1e-2, abs=1e-40)
 
 @pytest.mark.parametrize("a", [0.0, 1e-3, 1e-2])
 def test_reweighted_parts_reconstruct_the_total(bcs, W_global, a):
