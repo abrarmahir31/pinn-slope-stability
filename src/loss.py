@@ -278,3 +278,85 @@ def L_interface(net, ifaces, mats, s: Scales = SCALES,
 
     interface = total / W
     return interface, {"interface": interface.detach(), **parts}
+
+# ===========================================================================
+# total_loss -- the Step 3.2 deliverable.
+#
+# On the parts dict. Each term reports its own diagnostics in its own units:
+# per-tag / per-segment / per-contact MEANS, so a 100-point segment stays
+# comparable with a 400-point one. Those do NOT sum to anything meaningful.
+#
+# What DOES sum is `contrib_*`: the weighted contribution each term makes to
+# the total, w_i * L_i. `total == sum(contrib_*)` exactly, and that identity is
+# tested. Read `contrib_*` to see what is driving training; read the per-term
+# means to see which part of a term is unhappy.
+#
+# Mechanics is absent, not disabled-by-default-and-half-implemented. See
+# `include_mechanics` below.
+# ===========================================================================
+
+DEFAULT_WEIGHTS = {
+    "pde": 1.0,
+    "ic": 1.0,
+    "bc": 1.0,
+    "interface": 1.0,
+}
+
+
+def total_loss(net, coll, bcs, ic, ifaces, mats, s: Scales = SCALES,
+               weights: dict | None = None,
+               include_mechanics: bool = False,
+               per_term: bool = False):
+    """Weighted sum of the hydraulic loss terms.
+
+    Returns `(scalar, parts)`. `parts` always carries the four term totals
+    (`pde`, `ic_head`, `ic_disp`, `bc`, `interface`) and the four `contrib_*`
+    entries that sum to the scalar. With `per_term=True` it also carries each
+    term's own breakdown (per-tag, per-segment, per-contact).
+
+    include_mechanics
+        Must be False. `mechanical_residual` needs an equilibrated sigma_0 from
+        the gravity warm-up, which IS Step 3.4, so Step 3.2 structurally cannot
+        close before 3.4 opens -- this is coupling order, not slippage.
+
+        Shipping a partial version would be worse than shipping none: `base`,
+        `far_field_f1` and `pit_floor` are cheap Dirichlet/roller conditions,
+        but traction-free on the three exposed segments needs the stress
+        tensor. Half of it would make `total_loss` look complete while omitting
+        the free-surface condition on the cut face -- the boundary the failure
+        mechanism runs through.
+    """
+    if include_mechanics:
+        raise NotImplementedError(
+            "Mechanics is Step 3.4: mechanical_residual needs an equilibrated "
+            "sigma_0 from the gravity warm-up, and traction-free BCs on the "
+            "exposed segments need the stress tensor. See total_loss.__doc__."
+        )
+
+    w = dict(DEFAULT_WEIGHTS)
+    if weights:
+        unknown = set(weights) - set(DEFAULT_WEIGHTS)
+        if unknown:
+            raise KeyError(
+                f"unknown loss weight(s) {sorted(unknown)}; "
+                f"known: {sorted(DEFAULT_WEIGHTS)}"
+            )
+        w.update(weights)
+
+    pde, pde_parts = L_PDE(net, coll, mats, s, per_tag=per_term)
+    icl, ic_parts = L_IC(net, *ic)
+    bc, bc_parts = L_BC(net, bcs, mats, s, per_segment=per_term)
+    iface, if_parts = L_interface(net, ifaces, mats, s, per_contact=per_term)
+
+    contrib = {
+        "contrib_pde": w["pde"] * pde,
+        "contrib_ic": w["ic"] * icl,
+        "contrib_bc": w["bc"] * bc,
+        "contrib_interface": w["interface"] * iface,
+    }
+    total = sum(contrib.values())
+
+    parts = {**pde_parts, **ic_parts, **bc_parts, **if_parts}
+    parts.update({k: v.detach() for k, v in contrib.items()})
+    parts["total"] = total.detach()
+    return total, parts
