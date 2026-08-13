@@ -42,14 +42,7 @@ DATASET = (Path(__file__).resolve().parents[1]
 
 # Divergences between nondim.py and the Phase-1 dataset that are DELIBERATE.
 # Each needs a reason. Anything not listed here is drift and fails.
-KNOWN_DIVERGENCES = {
-    "H_ref_m": (
-        "nondim.py raised H_ref 30 -> 165 so psi* lands in [-1, 0] over the "
-        "initial condition (psi spans -3 to -161 m). The Phase-1 derivation "
-        "predates that and still records 30. Pinned by "
-        "test_H_ref_makes_psi_star_order_one."
-    ),
-}
+KNOWN_DIVERGENCES: dict[str, str] = {}
 
 
 @pytest.fixture(scope="module")

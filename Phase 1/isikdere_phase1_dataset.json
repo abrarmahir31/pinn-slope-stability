@@ -1803,7 +1803,7 @@
     "scales": {
       "L_ref_m": 170.0,
       "T_ref_s": 86400.0,
-      "H_ref_m": 30.0,
+      "H_ref_m": 165.0,
       "sig_ref_Pa": 1000000.0,
       "K_ref_mps": 1e-06,
       "E_ref_Pa": 100000000.0,
@@ -1813,10 +1813,10 @@
     "scale_justification": {
       "L_ref": "pit depth 170 m",
       "T_ref": "1 day - the transient rainfall response is the phenomenon of interest",
-      "H_ref": "max piezometric head above the coal seam",
+      "H_ref": "165 m, the largest suction head in the domain. psi over the initial condition spans -3 to -161 m, so this puts psi* in [-1, 0]: the field fills the network's output range without saturating the activation. The original 30 m (max piezometric head above the coal seam) gave psi* down to -5.4.",
       "sig_ref": "1 MPa, typical overburden stress",
       "K_ref": "representative saturated conductivity (coal seam order)",
-      "E_ref": "REVISED to 1e8 Pa. The adopted rock-mass moduli span 8e6 to 2.09e8 Pa (geometric mean 3.8e7); the original 1e9 was stiffer than every stratum in the model and pushed u* an order of magnitude below O(1).",
+      "E_ref": "1e8 Pa, a MARL scale. u* = u/U_ref = E_ref/E_actual, so E_ref must sit within about an order of magnitude of the strata that actually deform. Adopted rock-mass moduli are Mk 2.09e8, Mk_d 3.81e7 and Tm 4.26e9 Pa -- a span of 112x, so no single E_ref puts all three within an order. Tm is excluded: it is the crystallised limestone basement, effectively rigid, and small u* there is physically correct rather than a scaling failure; the failure mechanism runs through the marls. The Mk/Mk_d geometric mean is 8.9e7, i.e. the adopted 1e8. The original 1e9 gave u* = 26 for Mk_d, stiffer than every deforming stratum in the model.",
       "U_ref": "= sig_ref*L_ref/E_ref = 1.70 m"
     },
     "groups": {
@@ -1831,7 +1831,8 @@
       "T_diff_days": 334490.0,
       "T_diff_years": 916.4
     },
-    "caveat": "The mechanical residual is balanced (all three groups O(1)). The Richards residual is NOT: Pi_R_diff ~ 3e-6 with T_ref = 1 day. That is physically correct - the pit's diffusive timescale is ~916 years - not an error. Keep T_ref = 1 day and apply explicit per-residual normalisation in the loss, reporting Pi_R_diff so the weighting is reproducible. The alternative (T_ref = L^2/K, giving Pi_R_diff = 1) targets quasi-steady drawdown instead and abandons the rainfall transient. State the choice in the methods section."
+    "caveat": "The mechanical residual is balanced (all three groups O(1)). The Richards residual is NOT: Pi_R_diff ~ 3e-6 with T_ref = 1 day. That is physically correct - the pit's diffusive timescale is ~916 years - not an error. Keep T_ref = 1 day and apply explicit per-residual normalisation in the loss, reporting Pi_R_diff so the weighting is reproducible. The alternative (T_ref = L^2/K, giving Pi_R_diff = 1) targets quasi-steady drawdown instead and abandons the rainfall transient. State the choice in the methods section.",
+    "revision_note": "Scales corrected during Step 3.2 (2026-08-13). H_ref 30 -> 165 m and the E_ref justification rewritten; E_ref itself was already 1e8 here but nondim.py still carried the superseded 1e9. Nothing bound the two, so they had drifted in opposite directions. tests/test_scale_consistency.py now provides that binding: every difference must appear in KNOWN_DIVERGENCES with a written reason. NOTE: the groups block and diffusive_timescale below still use the earlier nondimensionalisation and have NOT been recomputed -- see the caveat."
   },
   "constitutive_models": {
     "richards": "mixed form: C(psi) dpsi/dt = div[K(psi) grad(psi + z)]",
