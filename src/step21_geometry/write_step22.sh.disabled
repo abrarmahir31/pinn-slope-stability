@@ -1,3 +1,7 @@
+# DISABLED. Overwrites boundaries.py with an older version
+# (no E_RM, no body_force). See DECISIONS.md.
+exit 1
+
 #!/usr/bin/env bash
 # Run this from step21_geometry.  It writes boundaries.py, 11_bc_checks.py,
 # and 12_bc_plot.py, then runs the checks and the plot.
