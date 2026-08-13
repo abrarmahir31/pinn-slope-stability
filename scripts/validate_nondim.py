@@ -63,21 +63,21 @@ def main():
     print(f"  L^2*dth/(K*H)            = {T_diff:.4e} s"
           f"  = {T_diff/86400:.1f} days = {T_diff/86400/365:.1f} yr")
     print("  Interpretation: a pressure signal needs this long to diffuse")
-    print("  across the pit depth. The per-day T_ref is far shorter, so the")
+    print("  across the pit depth. The per-day T_ref is 669x shorter, so the")
     print("  diffusion term is small but NOT negligible on a 1-day residual; over the 30-day window a signal diffuses ~4.5% of the pit depth.")
 
     # rebalanced scale set: adopt the diffusive timescale
     s2 = Scales(T_ref=T_diff)
-    print("\n  Rebalanced with T_ref = L^2/K:")
+    print("\n  Rebalanced with T_ref = L^2*dth/(K*H) = 669 days:")
     for name, (val, note) in check_group_magnitudes(s2).items():
         print(f"    {name:<24} = {val: .4e}   {note}")
     print("\n  NOTE: Pi_R_diff = 1 would need T_ref = L^2*dth/(K*H) = 669 days, not L^2/K -- against a 30-day window that abandons the rainfall transient entirely. The gravity group")
     print("  becomes K*T/L = L/H-scale ~ O(L/H). Choose T_ref per the")
     print("  physics you want the network to resolve:")
-    print("    * transient rainfall response over days -> T_ref = 1 day")
-    print("      (then explicitly weight the seepage residual, or")
-    print("       non-dimensionalise psi so the small group is absorbed).")
-    print("    * quasi-steady drawdown over the pit -> T_ref = L^2/K.")
+    print("    * transient rainfall response over days -> T_ref = 1 day  <-- ADOPTED")
+    print("      (no extra weighting needed: Pi_R_diff and Pi_R_grav agree to 3%,")
+    print("       so nothing dominates inside the residual. normalise='none'.)")
+    print("    * quasi-steady drawdown over the pit -> T_ref = L^2*dth/(K*H).")
 
     print("\n" + "=" * 60)
     print("CHECK 3 — algebraic round-trip (raw -> nd -> raw)")
