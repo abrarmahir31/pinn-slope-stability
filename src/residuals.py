@@ -122,7 +122,15 @@ def richards_residual(fields, x: Tensor, z: Tensor, t: Tensor, mat,
         CLOSED as "none" (Step 3.2, see DECISIONS.md D-S.4). Kept as a flag
         because the branches are cheap and the choice is worth being able
         to re-test:
-          "none"    — as written above; the diffusion term is O(1e-6)
+          "none"    — as written above. RESOLVED: use this.
+                         Pi_R_diff 1.4948e-3 and Pi_R_grav 1.5401e-3
+                         differ by 3%, so no term dominates INSIDE the
+                         Richards residual and a constant divisor has
+                         nothing to fix. The gap to the O(1) mechanical
+                         groups is cross-equation: total_loss weights
+                         and GradNorm handle it. Dividing here rescales
+                         residual and gradient together and only
+                         relabels the imbalance.
           "gravity" — divide through by Pi_R_grav; gravity term becomes O(1)
                       and diffusion O(H_ref/L_ref) = 0.971
           "storage" — divide by the pointwise |C*|, if storage dominates

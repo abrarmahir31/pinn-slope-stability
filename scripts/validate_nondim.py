@@ -8,11 +8,18 @@ Confirms two things:
       re-dimensionalising reproduces the raw-unit residual.
 
   (2) The residual TERMS are actually O(1) — and flags the one that is not.
-      With T_ref = 1 day the Richards diffusion group is ~3e-6, i.e. the
-      per-day timescale leaves the seepage term six orders below storage.
-      The script shows how choosing T_ref = L_ref^2 / K_ref (the diffusive
-      timescale) rebalances that term to O(1), which is what actually lets
-      GradNorm work rather than merely relabelling the imbalance.
+      With T_ref = 1 day, Pi_R_diff = 1.4948e-3 and Pi_R_grav = 1.5401e-3 --
+      balanced to 3% (ratio exactly L_ref/H_ref = 1.030), so neither capillary
+      diffusion nor gravity drainage dominates the Richards residual. Both sit
+      ~3 orders below the O(1) mechanical groups, but that is a CROSS-equation
+      weighting problem for total_loss and GradNorm, not one a constant divisor
+      inside the residual can fix: dividing rescales the residual and its
+      gradient together.
+      (Previously '~3e-6 ... six orders below storage ... T_ref = L^2/K
+      rebalances to O(1)'. Computed at H_ref = 30 m; H_ref is now 165 and
+      Pi_R_diff carries it linearly. Pi_R_diff = 1 needs T_ref = 669 days,
+      which abandons the rainfall transient. Step 1.6 closed as
+      normalise='none' -- see DECISIONS.md D-S.4.)
 """
 import math
 from src.nondim import Scales, SCALES, report_scales, G_ACCEL, RHO_W
@@ -36,7 +43,9 @@ def check_group_magnitudes(s: Scales) -> dict:
 
 def diffusive_timescale(s: Scales) -> float:
     """T for which Pi_R_diff = 1, i.e. the natural seepage timescale."""
-    return s.L_ref**2 / s.K_ref
+    # Richards diffusivity is D = K*H/dtheta, not K. L^2/K omits both and
+    # overstates the timescale by L/H * dtheta... = 500x (916 yr vs 1.83 yr).
+    return s.L_ref**2 * s.dtheta_ref / (s.K_ref * s.H_ref)
 
 
 def main():
@@ -51,7 +60,7 @@ def main():
     print("CHECK 2 — Richards diffusion timescale")
     print("=" * 60)
     T_diff = diffusive_timescale(SCALES)
-    print(f"  L_ref^2 / K_ref            = {T_diff:.4e} s"
+    print(f"  L^2*dth/(K*H)            = {T_diff:.4e} s"
           f"  = {T_diff/86400:.1f} days = {T_diff/86400/365:.1f} yr")
     print("  Interpretation: a pressure signal needs this long to diffuse")
     print("  across the pit depth. The per-day T_ref is far shorter, so the")
