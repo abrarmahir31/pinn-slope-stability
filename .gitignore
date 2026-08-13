@@ -27,3 +27,4 @@ src/step21_geometry/figures/
 __pycache__/
 *.pyc
 scratch_pde.py
+src/step21_geometry/sigma0_cache.npz
