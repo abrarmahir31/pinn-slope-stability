@@ -8,14 +8,10 @@ Repo rules honoured:
     silently vacuous;
   * analytic fields go through the same code path as the network.
 
-EXPECTED xfail
---------------
-`test_bishop_sign_is_tension_positive` fails until Fix 1 is applied to
-`nondim.effective_stress_nd`. If it xpasses, the fix landed — delete the
-marker, because an xfail left in place is a test that has stopped testing.
-"""
-
-from __future__ import annotations
+`test_bishop_sign_is_tension_positive` pins the stress convention settled in
+D-3.3.1. It is not a formula check — it is the guard that keeps
+`effective_stress_nd` and `mechanical_residual_nd` from drifting apart again.
+from __future__ import annotations"""
 
 import pytest
 import torch

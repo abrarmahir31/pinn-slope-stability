@@ -98,6 +98,12 @@ pinning displacements to zero at t = 0. "Mechanics deferred" means the
 *equilibrium residual* is deferred, not every displacement term.
 
 ---
+**Amended 13 Aug (see D-3.3.1).** `mechanical_residual` now exists, in
+`src/mechanics.py`. The `sigma_0` dependency was resolved by *injection*, not
+by removal: the function takes `sigma0_star` as an argument and defaults to
+assuming it is equilibrated. That assumption is still unverified against the
+0.20-0.26 `rho*g` imbalance, so the substance of this decision stands —
+`total_loss(include_mechanics=True)` should keep raising until Fix 6 is done.
 
 ## Scales
 
@@ -188,3 +194,54 @@ gravity — but three docstrings, `validate_nondim.py` and the Phase-1 caveat al
 still quoted the pre-change numbers (`~3e-6`, "six orders below storage", a
 916-year timescale computed as `L^2/K` without `H` or `dtheta`). Corrected in
 Step 3.2.
+---
+
+## Step 3.3
+
+### D-3.3.1 — Stress is tension-positive; `effective_stress_nd` was flipped
+
+`nondim.py` shipped two functions with opposite conventions:
+
+* `effective_stress_nd` returned `sigma - Pi_M_couple*chi*psi` — the
+  compression-positive form.
+* `mechanical_residual_nd` with its default `e_z=(0,-1)` gives
+  `div sigma - Pi_M_body*rho_ratio`, i.e. `div sigma + rho*g` — the
+  tension-positive equilibrium equation.
+
+Neither had a call site or a test (`grep` on `step-3.2-loss`: two definitions,
+two docstring mentions, nothing else), so nothing had ever pinned the
+convention and it was free to choose.
+
+**Adopted: tension-positive throughout the residual layer.** `sigma = D:eps`
+with `eps` from displacement gradients is tension-positive by construction;
+the alternative requires a minus sign inside the constitutive law, and that
+minus gets forgotten exactly once. `effective_stress_nd` now returns
+`sigma + Pi_M_couple*chi*psi`. At chi = 1 the whole pore term changes sign:
+psi* = +0.5 moves from -0.80932 to +0.80932.
+
+`boundaries.sigma_v_geostatic` / `sigma_h_geostatic` remain
+COMPRESSION-positive. `mechanics.sigma0_star_from_geostatic` is the single
+place in the project where the flip happens, and it is the only place it
+should ever happen.
+
+Pinned by `tests/test_coupling.py::test_bishop_sign_is_tension_positive`.
+This is the class of error that trains fine, converges, and produces a
+plausible-looking field with the pore pressure stabilising the slope instead
+of destabilising it.
+
+### D-3.3.2 — Kozeny–Carman is per-stratum, and Tm is undecided
+
+`KCConfig.per_unit` overrides the global `enabled` flag per material.
+
+Tm is **87.3% of the domain by area** (from the Step 2.3 IC cache),
+`n0 = 0.0221`, and Finding 6 records it as fracture-dominated with placeholder
+Tier-C van Genuchten parameters. At that porosity a 0.005 volumetric strain is
+a 23% porosity change against 1.2% for Mk — the KC factor is an order of
+magnitude more strain-sensitive on the stratum where a matrix-porosity law has
+the weakest physical claim.
+
+Switching KC on globally therefore makes Tm the dominant source of
+porosity-strain feedback in the model. **This has not yet been decided.** It
+must be, in writing, before any coupled production run, and the Step 6.2
+one-way/two-way ablation must be reported per-stratum as well as globally —
+otherwise "the effect of two-way coupling" is largely a statement about Tm.

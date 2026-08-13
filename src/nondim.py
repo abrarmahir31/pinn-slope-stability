@@ -58,12 +58,10 @@ class Scales:
 
     sig_ref: float = 1.0e6        # Pa    1 MPa (typical overburden stress)
     K_ref:   float = 1.0e-6       # m/s   representative sat. conductivity
-    E_ref: float = 1.0e8   # Pa  representative rock-mass modulus
-                       # (Phase-1 revision; adopted moduli span 8e6-2.09e8)
-    # NOTE (open): E_ref contradicts the Phase-1 decision to drop to 100 MPa --
-    # no stratum is near 1 GPa. Affects U_ref and the mechanical residual only.
-    # Must be settled before mechanical_residual is written. See open_items.md.
-
+    E_ref: float = 1.0e8          # Pa    marl-scale reference; Tm (4.264e9)
+                                  #       excluded as rigid basement. Adopted
+                                  #       marl moduli 3.81e7-2.09e8. D-S.1.
+                                  
     # --- representative bulk properties (for body-force group only) ---
     rho_b_ref: float = 1800.0     # kg/m^3, arbitrary O(1) reference (Mk sat = 1946)
 
