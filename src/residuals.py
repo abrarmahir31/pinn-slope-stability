@@ -118,11 +118,13 @@ def richards_residual(fields, x: Tensor, z: Tensor, t: Tensor, mat,
     fields : callable (x, z, t) -> psi* (or a tuple/dict containing it)
     x, z, t : leaf tensors, requires_grad=True, same shape (N, 1)
     mat : a `materials.Material` OR an `SWCC` (tests pass the latter)
-    normalise : how to rescale the whole equation. The Step 1.6 scaling
-        decision is still open, so it is a flag, not a hard-coded constant:
+    normalise : how to rescale the whole equation. The Step 1.6 scaling decision is
+        CLOSED as "none" (Step 3.2, see DECISIONS.md D-S.4). Kept as a flag
+        because the branches are cheap and the choice is worth being able
+        to re-test:
           "none"    — as written above; the diffusion term is O(1e-6)
           "gravity" — divide through by Pi_R_grav; gravity term becomes O(1)
-                      and diffusion O(H_ref/L_ref) = 0.176
+                      and diffusion O(H_ref/L_ref) = 0.971
           "storage" — divide by the pointwise |C*|, if storage dominates
         Dividing by a positive constant cannot change where R = 0, so every
         test below passes under all three. It only changes conditioning.
