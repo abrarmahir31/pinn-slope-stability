@@ -162,3 +162,29 @@ not look like a scale-factor bug.
 
 The convention is currently enforced by one call site and a docstring. Worth
 either renaming to make the unit explicit or asserting the magnitude on entry.
+### D-S.4 — Step 1.6 scaling closed as `normalise="none"`
+
+`Pi_R_diff = 1.4948e-3` and `Pi_R_grav = 1.5401e-3`; their ratio is exactly
+`L_ref/H_ref = 1.030`. Capillary diffusion and gravity drainage are balanced to
+3%, so no term dominates *inside* the Richards residual and a constant divisor
+has nothing to correct. Both sit ~3 orders below the O(1) mechanical groups,
+but that is a cross-equation weighting problem for the `total_loss` weights and
+GradNorm; dividing inside the residual rescales the residual and its gradient
+together and only relabels the imbalance.
+
+`T_ref = 1 day` is kept — the physically meaningful scale for a rainfall
+transient. Forcing `Pi_R_diff = 1` needs `T_ref = L^2*dtheta/(K*H) = 669 days`
+against a 30-day window, which abandons the phenomenon the model exists to
+resolve. Over 30 days a pressure signal diffuses ~4.5% of the pit depth: small,
+not negligible.
+
+The `normalise` flag is retained (`"none"` / `"gravity"` / `"storage"`) because
+the branches are cheap and the choice should stay re-testable.
+
+**Why this was deferred so long:** the decision was blocked on a six-orders-of-
+magnitude imbalance that stopped existing when `H_ref` went 30 -> 165 m.
+`Pi_R_diff` carries `H_ref` linearly, so raising it lifted diffusion onto
+gravity — but three docstrings, `validate_nondim.py` and the Phase-1 caveat all
+still quoted the pre-change numbers (`~3e-6`, "six orders below storage", a
+916-year timescale computed as `L^2/K` without `H` or `dtheta`). Corrected in
+Step 3.2.
