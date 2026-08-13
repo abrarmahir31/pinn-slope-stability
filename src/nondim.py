@@ -58,7 +58,8 @@ class Scales:
 
     sig_ref: float = 1.0e6        # Pa    1 MPa (typical overburden stress)
     K_ref:   float = 1.0e-6       # m/s   representative sat. conductivity
-    E_ref:   float = 1.0e8        # Pa    representative rock-mass modulus (Phase-1 revision; adopted moduli span 8e6-2.09e8)
+    E_ref: float = 1.0e8   # Pa  representative rock-mass modulus
+                       # (Phase-1 revision; adopted moduli span 8e6-2.09e8)
     # NOTE (open): E_ref contradicts the Phase-1 decision to drop to 100 MPa --
     # no stratum is near 1 GPa. Affects U_ref and the mechanical residual only.
     # Must be settled before mechanical_residual is written. See open_items.md.
@@ -197,12 +198,14 @@ def mechanical_residual_nd(div_sigma_eff_star, rho_ratio, e_z=(0.0, -1.0),
 
 def effective_stress_nd(sigma_star, psi_star, chi, s: Scales = SCALES):
     """Dimensionless Bishop effective stress (isotropic pore term).
+    TENSION POSITIVE, fixed by mechanical_residual_nd's e_z=(0,-1) above.
 
-        sigma*_eff = sigma* - Pi_M_couple * chi * psi*   (on normal components)
+        sigma*_eff = sigma_star + s.Pi_M_couple * chi * psi_star   (on normal components)
 
     chi ~ effective saturation Theta (Bishop parameter). psi* < 0 in suction.
     """
-    return sigma_star - s.Pi_M_couple * chi * psi_star
+    return sigma_star + s.Pi_M_couple * chi * psi_star
+
 
 def darcy_flux_nd(K_star, dpsi_dx_star, dpsi_dz_star, s: Scales = SCALES):
     """Dimensionless Darcy flux, consistent with richards_residual_nd.

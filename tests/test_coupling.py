@@ -231,8 +231,7 @@ def test_bulk_density_ratio_rises_with_water_content():
         (MK.rho_dry + 0.05 * 1000.0) / SCALES.rho_b_ref, rel=1e-12)
 
 
-@pytest.mark.xfail(reason="Fix 1 (docs/step33_fixes.md) not applied to "
-                          "nondim.effective_stress_nd", strict=False)
+
 def test_bishop_sign_is_tension_positive():
     """Positive pore pressure UNLOADS the skeleton. Tension-positive, that
     means sigma_eff is MORE POSITIVE than sigma when psi > 0.
