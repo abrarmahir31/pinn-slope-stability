@@ -216,7 +216,7 @@ def test_storage_term_is_evaluated_at_the_sample_time(pts, tag):
 
     R0 = call_residual(transient(k=0.0), x, z, t, mat)
     Rk = call_residual(wiggly(k=1e-3), x, z, t, mat)
-    assert float((Rk - R0).abs().max()) < 1e-12, (
+    assert float((Rk - R0).detach().abs().max()) < 1e-12, (
         f"{tag}: dpsi*/dt* is not zero at t* = pi/2; the time derivative may "
         f"be evaluated at the wrong point"
     )
