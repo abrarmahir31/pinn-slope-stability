@@ -97,15 +97,17 @@ Note for the supervisor conversation: `L_IC` already carries a `u*, v*` term
 pinning displacements to zero at t = 0. "Mechanics deferred" means the
 *equilibrium residual* is deferred, not every displacement term.
 
----
+
 **Amended 13 Aug (see D-3.3.1).** `mechanical_residual` now exists, in
 `src/mechanics.py`. The `sigma_0` dependency was resolved by *injection*, not
 by removal: the function takes `sigma0_star` as an argument and defaults to
 assuming it is equilibrated. That assumption is still unverified against the
 0.20-0.26 `rho*g` imbalance, so the substance of this decision stands —
 `total_loss(include_mechanics=True)` should keep raising until Fix 6 is done.
+--- 
 
 ## Scales
+
 
 ### D-S.1 — `E_ref = 1e8 Pa` is a marl scale, and Tm is excluded
 

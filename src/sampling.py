@@ -70,6 +70,15 @@ class Collocation:
     nx: torch.Tensor | None = None      # outward unit normal, boundary sets only
     nz: torch.Tensor | None = None
 
+    # Equilibrated initial state, attached by sigma0.attach_sigma0. Both are
+    # dimensionless and TENSION POSITIVE (D-3.3.1). They are optional because
+    # the hydraulic loss does not need them, and None is the honest default:
+    # a zero sigma0 would look like a stress-free domain rather than an
+    # unattached field.
+    sigma0: torch.Tensor | None = None   # (N,3) [sxx*, szz*, sxz*]
+    rho0: torch.Tensor | None = None     # (N,1) rho_0 / rho_b_ref
+    sigma0_misses: int = 0               # points that used a nearest fallback
+
     def __len__(self) -> int:
         return self.x.shape[0]
 

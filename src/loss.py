@@ -14,6 +14,7 @@ import numpy as np
 import torch  # type: ignore
 
 from src.nondim import SCALES, Scales
+from src.mechanics import mechanical_residual
 from src.residuals import richards_residual, darcy_flux, interface_flux_jump
 from src.sampling import load_initial
 from src.step21_geometry import boundaries as bnd
@@ -129,6 +130,60 @@ def L_PDE(net, coll, mats, s: Scales = SCALES, normalise: str = "none",
 
     pde = total / wsum
     return pde, {"pde_richards": pde.detach(), **parts}
+
+def L_PDE_mech(net, coll, mats, s: Scales = SCALES, per_tag: bool = False,
+               bishop: bool = True):
+    """mean_w[R_mech_x^2 + R_mech_z^2] over the interior collocation set.
+
+    Requires `coll.sigma0` and `coll.rho0`, attached by
+    `sigma0.attach_sigma0`. Both are checked here rather than defaulted,
+    because the defaults that would otherwise apply are silently wrong:
+    sigma0 = 0 is a stress-free domain, and rho0 = 1 is rho_b_ref rather than
+    the wet profile the FE solve was equilibrated against.
+
+    Tag-partitioned for the same reason as L_PDE: E spans 3.81e7 to 4.264e9
+    across the three strata, and `mechanical_residual` takes ONE material.
+
+    The x and z components are summed, not averaged. They are the two
+    components of one vector equation, so weighting them separately would be
+    a modelling choice with nothing behind it.
+    """
+    if coll.sigma0 is None or coll.rho0 is None:
+        raise ValueError(
+            "L_PDE_mech: this Collocation has no sigma_0 attached. Call "
+            "sigma0.attach_sigma0(coll) at sample time. Running without it "
+            "would silently solve a stress-free, wrong-density problem."
+        )
+
+    w_all = coll.w.detach()
+    wsum = w_all.sum()
+    total = torch.zeros((), dtype=coll.x.dtype, device=coll.x.device)
+    parts = {}
+
+    for tag in sorted(set(coll.tag.tolist())):
+        if tag not in mats:
+            raise KeyError(
+                f"L_PDE_mech: collocation tag {tag!r} has no entry in mats. "
+                f"Tags present: {sorted(set(coll.tag.tolist()))}"
+            )
+        m = torch.as_tensor(coll.tag == tag, device=coll.x.device)
+        xs, zs, ts = coll.x[m], coll.z[m], coll.t[m]
+        sig0 = coll.sigma0[m]
+        sigma0_star = (sig0[:, 0:1], sig0[:, 1:2], sig0[:, 2:3])
+
+        res_x, res_z = mechanical_residual(
+            net, xs, zs, ts, mats[tag],
+            sigma0_star=sigma0_star, rho0_ratio=coll.rho0[m],
+            bishop=bishop, s=s)
+
+        contrib = (w_all[m] * (res_x.pow(2) + res_z.pow(2))).sum()
+        total = total + contrib
+        if per_tag:
+            parts[f"pde_mech_{tag}"] = (contrib / w_all[m].sum()).detach()
+
+    mech = total / wsum
+    return mech, {"pde_mech": mech.detach(), **parts}
+
 
 # Segment -> condition type. Explicit, not inferred: every segment is named
 # exactly once, so adding a seventh is a KeyError rather than a silent skip.
@@ -297,6 +352,7 @@ def L_interface(net, ifaces, mats, s: Scales = SCALES,
 
 DEFAULT_WEIGHTS = {
     "pde": 1.0,
+    "pde_mech": 1.0,
     "ic": 1.0,
     "bc": 1.0,
     "interface": 1.0,
@@ -315,23 +371,19 @@ def total_loss(net, coll, bcs, ic, ifaces, mats, s: Scales = SCALES,
     term's own breakdown (per-tag, per-segment, per-contact).
 
     include_mechanics
-        Must be False. `mechanical_residual` needs an equilibrated sigma_0 from
-        the gravity warm-up, which IS Step 3.4, so Step 3.2 structurally cannot
-        close before 3.4 opens -- this is coupling order, not slippage.
+        Adds the equilibrium residual (Step 3.3a). Requires a Collocation with
+        sigma_0 attached; see sigma0.attach_sigma0.
 
-        Shipping a partial version would be worse than shipping none: `base`,
-        `far_field_f1` and `pit_floor` are cheap Dirichlet/roller conditions,
-        but traction-free on the three exposed segments needs the stress
-        tensor. Half of it would make `total_loss` look complete while omitting
-        the free-surface condition on the cut face -- the boundary the failure
-        mechanism runs through.
+        STILL MISSING when this is True: traction-free boundary conditions on
+        natural_ground, bench and cut_face. `L_BC` covers the hydraulic
+        conditions only; the mechanical BCs that the FE warm-up applied
+        (base fixed, pit_floor and far_field_f1 rollers) are Dirichlet and
+        cheap, but traction-free on the three exposed segments needs the
+        stress tensor assembled on a boundary set. Until that exists the
+        network is free to put whatever traction it likes on the cut face --
+        the boundary the failure mechanism runs through. Do not read a
+        converged coupled run as validated before then. See D-3.2.5.
     """
-    if include_mechanics:
-        raise NotImplementedError(
-            "Mechanics is Step 3.4: mechanical_residual needs an equilibrated "
-            "sigma_0 from the gravity warm-up, and traction-free BCs on the "
-            "exposed segments need the stress tensor. See total_loss.__doc__."
-        )
 
     w = dict(DEFAULT_WEIGHTS)
     if weights:
@@ -354,9 +406,13 @@ def total_loss(net, coll, bcs, ic, ifaces, mats, s: Scales = SCALES,
         "contrib_bc": w["bc"] * bc,
         "contrib_interface": w["interface"] * iface,
     }
+    mech_parts = {}
+    if include_mechanics:
+        mech, mech_parts = L_PDE_mech(net, coll, mats, s, per_tag=per_term)
+        contrib["contrib_pde_mech"] = w["pde_mech"] * mech
     total = sum(contrib.values())
 
-    parts = {**pde_parts, **ic_parts, **bc_parts, **if_parts}
+    parts = {**pde_parts, **mech_parts, **ic_parts, **bc_parts, **if_parts}
     parts.update({k: v.detach() for k, v in contrib.items()})
     parts["total"] = total.detach()
     return total, parts

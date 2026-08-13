@@ -25,6 +25,7 @@ SEED = 20250812
 MATS = load_materials()
 DTYPE = torch.float64
 TERMS = ("pde", "ic", "bc", "interface")
+MECH_TERMS = TERMS + ("pde_mech",)
 
 
 @pytest.fixture(scope="module")
@@ -140,7 +141,7 @@ def test_weights_default_to_one(net, bundle):
     a, _ = call(net, bundle)
     b, _ = call(net, bundle, weights=dict(DEFAULT_WEIGHTS))
     assert float(b.detach()) == pytest.approx(float(a.detach()), rel=1e-12)
-    assert set(DEFAULT_WEIGHTS) == set(TERMS)
+    assert set(DEFAULT_WEIGHTS) == set(MECH_TERMS)
 
 
 def test_unknown_weight_key_is_rejected(net, bundle):
@@ -152,14 +153,41 @@ def test_unknown_weight_key_is_rejected(net, bundle):
 # ---------------------------------------------------------------------------
 # Mechanics is absent, not half-present
 # ---------------------------------------------------------------------------
-def test_include_mechanics_refuses(net, bundle):
-    """Step 3.2 cannot close before 3.4 opens. The refusal is explicit so the
-    gap reads as coupling order rather than an oversight."""
-    with pytest.raises(NotImplementedError, match="Step 3.4"):
+def test_include_mechanics_without_sigma0_refuses(net, bundle):
+    """Was `test_include_mechanics_refuses` (Step 3.2). Mechanics now exists,
+    but it is meaningless without an equilibrated sigma_0: the defaults that
+    would otherwise apply are sigma_0 = 0 (a stress-free domain) and
+    rho_0 = rho_b_ref (not the wet profile the FE warm-up equilibrated
+    against). Both are silently wrong, so this raises rather than defaults."""
+    with pytest.raises(ValueError, match="no sigma_0 attached"):
         call(net, bundle, include_mechanics=True)
 
 
-def test_no_mechanical_term_leaks_into_parts(net, bundle):
+def test_include_mechanics_runs_once_sigma0_is_attached(net, bundle):
+    from src.sigma0 import attach_sigma0
+    coll = attach_sigma0(sample_interior(N, SEED))
+    b = dict(bundle, coll=coll)
+    a, parts_off = call(net, b)
+    c, parts_on = call(net, b, include_mechanics=True)
+    assert "pde_mech" in parts_on and "pde_mech" not in parts_off
+    assert float(c.detach()) > float(a.detach())
+
+
+def test_mechanics_off_is_bit_identical_to_before(net, bundle):
+    """The ablation depends on the hydraulic half being untouched by the
+    presence of the mechanical machinery."""
+    from src.sigma0 import attach_sigma0
+    b = dict(bundle, coll=attach_sigma0(sample_interior(N, SEED)))
+    a, _ = call(net, bundle)
+    c, _ = call(net, b, include_mechanics=False)
+    assert float(c.detach()) == float(a.detach())
+
+
+def test_no_mechanical_term_leaks_into_parts_when_off(net, bundle):
+    """Renamed from `test_no_mechanical_term_leaks_into_parts`. The claim is
+    now conditional: with include_mechanics=False nothing mechanical may
+    appear, which is what makes the one-way run in the Step 6.2 ablation a
+    genuine one-way run."""
     _, parts = call(net, bundle, per_term=True)
     for k in parts:
         assert "mech" not in k.lower(), f"unexpected mechanical part {k!r}"
