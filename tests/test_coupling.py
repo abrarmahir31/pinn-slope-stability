@@ -16,7 +16,7 @@ from __future__ import annotations"""
 import pytest
 import torch
 
-from src.coupling import (KC_OFF, KC_ON, KCConfig, bishop_chi,
+from src.coupling import (KC_DEFAULT, KC_OFF, KC_ON, KCConfig, bishop_chi,
                           bulk_density_ratio, kozeny_carman_factor,
                           porosity_from_strain)
 from src.derivatives import as_inputs
@@ -322,3 +322,48 @@ def test_bishop_term_vanishes_for_a_uniform_psi_field():
     on_x, _ = mechanical_residual(f, x, z, t, MK, bishop=True, body_force=False)
     off_x, _ = mechanical_residual(f, x, z, t, MK, bishop=False, body_force=False)
     assert (on_x - off_x).abs().max().item() == pytest.approx(0.0, abs=1e-14)
+
+# ---------------------------------------------------------------------------
+# The configuration of record (D-3.3.2)
+# ---------------------------------------------------------------------------
+def test_kc_default_excludes_Tm_and_includes_the_marls():
+    """D-3.3.2. Tm is excluded because Kozeny-Carman is a matrix-porosity law
+    and Tm's conductivity is fracture-controlled (Finding 6), not because it
+    misbehaves numerically. If someone later 'simplifies' this to a plain
+    enabled=True, this is what objects."""
+    eps = torch.full((4, 1), -5e-4, dtype=torch.float64)
+    assert torch.equal(kozeny_carman_factor(TM.n0, eps, KC_DEFAULT, tag="Tm"),
+                       torch.ones_like(eps))
+    for mat, tag in ((MK, "Mk"), (MKD, "Mk_d")):
+        f = kozeny_carman_factor(mat.n0, eps, KC_DEFAULT, tag=tag)
+        assert not torch.equal(f, torch.ones_like(f)), tag
+        assert (f < 1.0).all(), f"{tag}: compression must lower K_s"
+
+
+def test_kc_default_is_flippable_for_the_ablation():
+    """Step 6.2 needs three arms: KC everywhere, KC on the marls only, and no
+    feedback at all. All three must be reachable without editing source."""
+    eps = torch.full((4, 1), -5e-4, dtype=torch.float64)
+    everywhere = KCConfig(enabled=True)
+    f_all = kozeny_carman_factor(TM.n0, eps, everywhere, tag="Tm")
+    f_def = kozeny_carman_factor(TM.n0, eps, KC_DEFAULT, tag="Tm")
+    f_off = kozeny_carman_factor(TM.n0, eps, KC_OFF, tag="Tm")
+    assert not torch.equal(f_all, f_def)
+    assert torch.equal(f_def, f_off)          # both are 1.0 for Tm
+    assert not torch.equal(f_all, f_off)
+
+
+def test_tm_is_strain_sensitive_but_barely_strains():
+    """The empirical fact behind D-3.3.2, pinned so the argument in the thesis
+    can be checked against the code. Per unit strain Tm is ~11x more sensitive
+    than Mk_d; at the strains it actually sees, the two land within 1.5%."""
+    e10 = {}
+    for mat in (MKD, TM):
+        lo, hi = 1e-9, 0.4 * mat.n0
+        for _ in range(80):                    # bisection, no scipy import
+            mid = 0.5 * (lo + hi)
+            f = kozeny_carman_factor(
+                mat.n0, torch.tensor([[mid]], dtype=torch.float64), KC_ON).item()
+            lo, hi = (mid, hi) if f < 1.10 else (lo, mid)
+        e10[mat.tag] = 0.5 * (lo + hi)
+    assert e10["Mk_d"] / e10["Tm"] > 5.0       # Tm far more sensitive per strain

@@ -42,6 +42,7 @@ __all__ = [
     "KCConfig",
     "KC_OFF",
     "KC_ON",
+    "KC_DEFAULT",
     "porosity_from_strain",
     "kozeny_carman_factor",
     "bishop_chi",
@@ -89,6 +90,24 @@ class KCConfig:
 
 KC_OFF = KCConfig(enabled=False)
 KC_ON = KCConfig(enabled=True)
+
+#: The configuration of record. Kozeny-Carman ON for the two marls, OFF for
+#: Tm. See DECISIONS.md D-3.3.2 for the argument; the short version is that KC
+#: is a matrix-porosity law and Tm's conductivity is fracture-controlled, so
+#: applying it there would claim that compressing a limestone matrix closes
+#: fractures the model does not represent -- possibly with the wrong sign.
+#:
+#: NOT a numerical decision. Measured against the gravity-equilibrated state,
+#: Tm's KC factor at the 99th percentile of strain is 0.898, against 0.910 for
+#: Mk_d: its low porosity makes it strain-SENSITIVE, but its 4.264e9 stiffness
+#: means it barely strains, and the two effects very nearly cancel. Excluding
+#: Tm therefore costs little and buys a defensible sentence.
+#:
+#: Flip it for the Step 6.2 sensitivity case:
+#:     KCConfig(enabled=True)                        # KC everywhere
+#:     KCConfig(enabled=True, per_unit={"Tm": False})  # this default
+#:     KC_OFF                                        # one-way run
+KC_DEFAULT = KCConfig(enabled=True, per_unit={"Tm": False})
 
 
 # ---------------------------------------------------------------------------
