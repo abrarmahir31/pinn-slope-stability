@@ -233,17 +233,50 @@ of destabilising it.
 
 ### D-3.3.2 — Kozeny–Carman is per-stratum, and Tm is undecided
 
-`KCConfig.per_unit` overrides the global `enabled` flag per material.
+### D-3.3.2 — Kozeny–Carman applies to the marls, not to Tm
 
-Tm is **87.3% of the domain by area** (from the Step 2.3 IC cache),
-`n0 = 0.0221`, and Finding 6 records it as fracture-dominated with placeholder
-Tier-C van Genuchten parameters. At that porosity a 0.005 volumetric strain is
-a 23% porosity change against 1.2% for Mk — the KC factor is an order of
-magnitude more strain-sensitive on the stratum where a matrix-porosity law has
-the weakest physical claim.
+`KC_DEFAULT = KCConfig(enabled=True, per_unit={"Tm": False})` in
+`src/coupling.py` is the configuration of record.
 
-Switching KC on globally therefore makes Tm the dominant source of
-porosity-strain feedback in the model. **This has not yet been decided.** It
-must be, in writing, before any coupled production run, and the Step 6.2
-one-way/two-way ablation must be reported per-stratum as well as globally —
-otherwise "the effect of two-way coupling" is largely a statement about Tm.
+**The reason is physical, not numerical.** Kozeny–Carman is a
+matrix-porosity law. Finding 6 records Tm as fracture-dominated — 2.2%
+porosity at K_s = 3.13e-6 m/s — with Tier-C placeholder van Genuchten
+parameters, and notes that any matrix SWCC "describes the pathway water does
+not use." Applying KC there would assert that elastically compressing a
+limestone matrix closes the fractures that actually carry the flow. That is
+unsupported, and plausibly the wrong sign: matrix compression under confinement
+can open fracture aperture rather than close it.
+
+**What the numbers say.** Measured against the gravity-equilibrated sigma_0
+(`sigma0_cache.npz`), volumetric strain and the resulting KC factor are:
+
+| unit | n0 | median \|eps_v\| | p99 | KC factor at p99 |
+|---|---|---|---|---|
+| Mk | 0.4268 | 3.50e-04 | 1.83e-03 | 0.981 |
+| Mk_d | 0.3499 | 2.66e-03 | 8.03e-03 | 0.910 |
+| Tm | 0.0221 | 3.35e-04 | 7.67e-04 | 0.898 |
+
+Tm needs only eps_v = 7.0e-4 to move K_s by 10%, against 8.2e-3 for Mk_d — it
+is roughly 11x more sensitive per unit strain. But at E = 4.264e9 it strains
+about an eighth as much, and the two effects very nearly cancel: 0.898 against
+0.910. An earlier draft of this decision claimed Tm would dominate the
+feedback; that was wrong, and the correction is recorded here because the
+conclusion survived for a different reason than the one first given.
+
+So excluding Tm costs ~10% conductivity change in a unit whose SWCC is a
+placeholder, and buys a claim that can be defended in the viva.
+
+**The result worth reporting.** The largest strains in the domain are in
+**Mk_d** — median 2.66e-03, nearly 8x Mk's — because at E = 3.806e7 it is the
+softest unit by a factor of 5.5. Mk_d is also the unit that fails
+(sigma_ci 4.29 vs 17.9 MPa). The porosity–strain feedback is therefore
+strongest exactly in the weak zone the failure surface runs through, which
+makes two-way coupling load-bearing here rather than a formality.
+
+Caveat: Mk_d's van Genuchten parameters are borrowed from Mk by analogy
+(Finding 2, Tier B). The feedback in the failing unit rests on a measured n0
+and a borrowed SWCC, so it belongs in the Step 6.2 sensitivity sweep.
+
+**Step 6.2 needs three arms**, all reachable without editing source:
+`KCConfig(enabled=True)` (KC everywhere), `KC_DEFAULT` (marls only), and
+`KC_OFF` (one-way). Report per-stratum as well as globally.
