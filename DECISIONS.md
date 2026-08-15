@@ -280,3 +280,34 @@ and a borrowed SWCC, so it belongs in the Step 6.2 sensitivity sweep.
 **Step 6.2 needs three arms**, all reachable without editing source:
 `KCConfig(enabled=True)` (KC everywhere), `KC_DEFAULT` (marls only), and
 `KC_OFF` (one-way). Report per-stratum as well as globally.
+
+### D-3.3.4 — L_BC_mech inherits L_BC's normalisation, which is the sampler's choice
+
+Squared residuals accumulate across segments and divide by the GLOBAL weight
+sum, so each segment contributes in proportion to its point count. With
+`sample_boundary` allocating n, n//4, n//3, n//2 by segment, the relative
+weight of `cut_face` against `natural_ground` is set by the sampler, not by
+any physical argument.
+
+Kept for consistency with `L_BC` rather than because it is right. Measured at
+the end of Step 3.3, the three traction-free segments are five to six orders
+above the three constrained ones and `cut_face` is 13x `natural_ground`, so
+the sampler's allocation is currently not what decides the balance — the
+physics is. Revisit if that changes, and record the revisit rather than
+silently retuning.
+
+Per-segment parts are MEANS and do not sum to the total, the same distinction
+as D-3.2.2.
+## Step 3.4 (15 Aug) — found while measuring gradient norms
+- [ ] Z_TOE = 271.13 but inside_domain ends at z ~ 270.75 (x = 0); the
+      transition is sharp, so this is two constants disagreeing by 0.37 m,
+      not a noisy trace. boundaries.py:69 now samples pit_floor to
+      Z_TOE - 0.5 as a workaround. Decide which constant is authoritative
+      and derive the other from it.
+- [ ] Was invisible at N=300 (~0.4 expected hits in the bad band) and
+      fatal at N=3000. Phase 4 runs N_BC = 2000-5000, so this would have
+      surfaced there instead, mid-training.
+- [ ] sigma0.attach_sigma0 tolerated the same points silently
+      (max_miss_frac=0.01) while L_BC raised KeyError. Align the two
+      tolerances; a 1% silent-miss allowance means sigma_0 can be wrong
+      on 1% of points anywhere with no signal.
