@@ -48,7 +48,7 @@ def ic_targets(path: str | None = None, s: Scales = SCALES):
 
     return coll, (psi0 / s.H_ref).detach()
 
-def L_IC(net, coll, psi0_star):
+def L_IC(net, coll, psi0_star, keep_graph: bool = False):
     """mean_w[(psi* - psi0*)^2] + mean_w[u*^2 + v*^2] at t* = 0.
 
     Displacements are homogeneous at t = 0, so the mechanical term needs
@@ -70,7 +70,8 @@ def L_IC(net, coll, psi0_star):
     uv = uv_of(out)
     disp = (w * uv.pow(2).sum(dim=1, keepdim=True)).sum() / wsum
 
-    return head + disp, {"ic_head": head.detach(), "ic_disp": disp.detach()}
+    d = (lambda v: v) if keep_graph else (lambda v: v.detach())
+    return head + disp, {"ic_head": d(head), "ic_disp": d(disp)}
 
 
 # ---------------------------------------------------------------
