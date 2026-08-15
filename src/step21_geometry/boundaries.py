@@ -66,7 +66,10 @@ def sample_boundaries(n=2000, seed=0):
                                             g.X_BENCH_END, n // 4, r),
         "cut_face":       _arclength_sample(g.z_ground, 0.0, g.X_CREST, n, r),
         "pit_floor":      np.column_stack([np.zeros(n // 3),
-                                           r.uniform(g.Z_BASE, g.Z_TOE, n // 3)]),
+                                           r.uniform(g.Z_BASE, g.Z_TOE - 0.5, n // 3)]),
+                                           # 0.5 m inset: inside_domain ends at z ~ 270.75 while Z_TOE = 271.13,
+        # so points in the top ~0.37 m tag 'outside' and L_BC raises. See
+        # open_items -- the two constants disagree and one of them is wrong.
         "base":           np.column_stack([r.uniform(0.0, X_F1_BASE, n // 2),
                                            np.full(n // 2, g.Z_BASE)]),
         "far_field_f1":   (lambda z: np.column_stack([g.x_f1(z), z]))(
