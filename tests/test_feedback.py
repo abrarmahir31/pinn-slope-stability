@@ -207,9 +207,13 @@ def test_Tm_is_excluded_from_the_feedback(caplog):
 # total_loss: the 2x2 ablation
 # ---------------------------------------------------------------------------
 def _bundle():
+    """sigma_0 goes on the boundary sets too: L_BC_mech enforces
+    sigma_total . n = 0 on the three exposed segments, and sigma_total starts
+    from sigma_0."""
     return dict(coll=attach_sigma0(sample_interior(N, SEED)),
-                bcs=sample_boundary(N, SEED, 30.0), ic=ic_targets(),
-                ifaces=sample_interfaces(N, SEED), mats=MATS)
+                bcs={k: attach_sigma0(v)
+                     for k, v in sample_boundary(N, SEED, 30.0).items()},
+                ic=ic_targets(), ifaces=sample_interfaces(N, SEED), mats=MATS)
 
 
 def test_the_four_ablation_arms_are_all_distinct():

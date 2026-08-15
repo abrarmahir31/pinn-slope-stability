@@ -15,7 +15,7 @@ import torch  # type: ignore
 
 from src.nondim import SCALES, Scales
 from src.coupling import KC_DEFAULT, KC_OFF, KCConfig, kozeny_carman_factor
-from src.mechanics import mechanical_residual, strain_star
+from src.mechanics import mechanical_residual, strain_star, total_stress_star
 from src.residuals import richards_residual, darcy_flux, interface_flux_jump
 from src.sampling import load_initial
 from src.step21_geometry import boundaries as bnd
@@ -325,6 +325,98 @@ def L_BC(net, bcs, mats, s: Scales = SCALES, per_segment: bool = False):
 _INTERFACE_LOWER = "Tm"
 
 
+def L_BC_mech(net, bcs, mats, s: Scales = SCALES, per_segment: bool = False):
+    """Mechanical boundary loss over the six segments.
+
+    Three kinds, from `boundaries.mechanical_bc`:
+
+      base          u* = v* = 0            Dirichlet
+      pit_floor     u* = 0                 roller (normal is -x)
+      far_field_f1  u* = 0                 roller (normal is +x)
+      natural_ground / bench / cut_face    sigma_total . n = 0
+
+    THE TRACTION-FREE CONDITION IS ON TOTAL STRESS, and after D-3.3.3 that is
+    a quantity this project can actually assemble. It is the free-surface
+    condition: nothing outside the slope pushes on it, and the pore fluid is
+    at atmospheric. Both components vanish, so it is two scalar conditions per
+    point, not one.
+
+    Without it the network can put any traction it likes on the cut face --
+    the boundary the failure mechanism runs through -- while every interior
+    residual stays satisfied. That is why D-3.2.5 refused to ship half the
+    mechanics: `total_loss` would have looked complete with the one condition
+    that constrains the failure surface missing.
+
+    Requires sigma_0 on every boundary Collocation. Boundary sets are nudged
+    0.25 m inward for that lookup (see sigma0.attach_sigma0); the roller and
+    fixed segments do not use sigma_0 at all, so the approximation touches only
+    the three exposed segments.
+
+    Same normalisation as L_BC: squared residuals accumulate and divide by the
+    GLOBAL weight sum, so segments contribute in proportion to their point
+    count, which is a choice inherited from the sampler.
+    """
+    total = None
+    wsum = 0.0
+    parts = {}
+
+    for seg, coll in bcs.items():
+        kind = bnd.mechanical_bc(seg)
+        w = coll.w.detach()
+        wsum = wsum + float(w.sum())
+
+        if kind is None:                       # traction-free
+            if coll.sigma0 is None:
+                raise ValueError(
+                    f"L_BC_mech: segment {seg!r} has no sigma_0 attached. "
+                    f"Call sigma0.attach_sigma0 on every boundary set at "
+                    f"sample time; a zero sigma_0 here would read as a "
+                    f"stress-free slope and be satisfied trivially."
+                )
+            if coll.nx is None or coll.nz is None:
+                raise ValueError(
+                    f"L_BC_mech: segment {seg!r} carries no normals.")
+
+            R2 = torch.zeros_like(coll.x)
+            for tag in sorted(set(coll.tag.tolist())):
+                if tag not in mats:
+                    raise KeyError(
+                        f"L_BC_mech: boundary tag {tag!r} on segment {seg!r} "
+                        f"has no entry in mats. Present: {sorted(mats)}")
+                idx = torch.as_tensor(
+                    np.flatnonzero(coll.tag == tag),
+                    dtype=torch.long, device=coll.x.device)
+                # Fresh leaves: the strain here is differentiated w.r.t. these
+                # coordinates, and indexing a view silently detaches nothing
+                # but makes the graph depend on the parent's layout.
+                xs = coll.x[idx].detach().clone().requires_grad_(True)
+                zs = coll.z[idx].detach().clone().requires_grad_(True)
+                ts = coll.t[idx].detach().clone().requires_grad_(True)
+                sg = coll.sigma0[idx]
+                (sxx, szz, sxz), _, _ = total_stress_star(
+                    net, xs, zs, ts, mats[tag],
+                    sigma0_star=(sg[:, 0:1], sg[:, 1:2], sg[:, 2:3]), s=s)
+
+                nx, nz = coll.nx[idx], coll.nz[idx]
+                tx = sxx * nx + sxz * nz
+                tz = sxz * nx + szz * nz
+                R2 = R2.index_copy(0, idx, tx.pow(2) + tz.pow(2))
+
+        else:
+            _, cons = kind
+            uv = uv_of(net(coll.x, coll.z, coll.t))
+            R2 = uv[:, 0:1].pow(2) if "v" not in cons else \
+                uv[:, 0:1].pow(2) + uv[:, 1:2].pow(2)
+
+        contrib = (w * R2).sum()
+        total = contrib if total is None else total + contrib
+        if per_segment:
+            parts[f"bcmech_{seg}"] = (contrib / w.sum()).detach()
+
+    bc = total / wsum
+    return bc, {"bc_mech": bc.detach(), **parts}
+
+
 def L_interface(net, ifaces, mats, s: Scales = SCALES,
                 per_contact: bool = False):
     """Squared normal-flux jump across the Mk|Tm and Mk_d|Tm contacts.
@@ -378,6 +470,7 @@ def L_interface(net, ifaces, mats, s: Scales = SCALES,
 DEFAULT_WEIGHTS = {
     "pde": 1.0,
     "pde_mech": 1.0,
+    "bc_mech": 1.0,
     "ic": 1.0,
     "bc": 1.0,
     "interface": 1.0,
@@ -411,15 +504,17 @@ def total_loss(net, coll, bcs, ic, ifaces, mats, s: Scales = SCALES,
         Adds the equilibrium residual (Step 3.3a). Requires a Collocation with
         sigma_0 attached; see sigma0.attach_sigma0.
 
-        STILL MISSING when this is True: traction-free boundary conditions on
-        natural_ground, bench and cut_face. `L_BC` covers the hydraulic
-        conditions only; the mechanical BCs that the FE warm-up applied
-        (base fixed, pit_floor and far_field_f1 rollers) are Dirichlet and
-        cheap, but traction-free on the three exposed segments needs the
-        stress tensor assembled on a boundary set. Until that exists the
-        network is free to put whatever traction it likes on the cut face --
-        the boundary the failure mechanism runs through. Do not read a
-        converged coupled run as validated before then. See D-3.2.5.
+        Adds BOTH the interior equilibrium residual and the mechanical
+        boundary conditions (`L_BC_mech`): base fixed, pit_floor and
+        far_field_f1 rollers, and sigma_total . n = 0 on natural_ground,
+        bench and cut_face. Every boundary Collocation must therefore carry
+        sigma_0 as well as the interior one.
+
+        The traction-free half is what D-3.2.5 refused to ship without. It is
+        the condition on the cut face, which is the boundary the failure
+        mechanism runs through, and without it the interior residuals can all
+        be satisfied by a field that pushes arbitrarily hard on the free
+        surface.
     """
 
     w = dict(DEFAULT_WEIGHTS)
@@ -448,6 +543,9 @@ def total_loss(net, coll, bcs, ic, ifaces, mats, s: Scales = SCALES,
     if include_mechanics:
         mech, mech_parts = L_PDE_mech(net, coll, mats, s, per_tag=per_term)
         contrib["contrib_pde_mech"] = w["pde_mech"] * mech
+        bcm, bcm_parts = L_BC_mech(net, bcs, mats, s, per_segment=per_term)
+        contrib["contrib_bc_mech"] = w["bc_mech"] * bcm
+        mech_parts = {**mech_parts, **bcm_parts}
     total = sum(contrib.values())
 
     parts = {**pde_parts, **mech_parts, **ic_parts, **bc_parts, **if_parts}

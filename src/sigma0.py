@@ -127,32 +127,72 @@ def rho0_field(path_geom: str | None = None):
         z = np.asarray(z, float).ravel()
         psi = np.asarray(psi_initial(x, z), float).ravel()
         tag = np.asarray(g.material_tag(x, z)).astype(str)
-        rho = np.empty(x.size)
+        rho = np.full(x.size, np.nan)
         for k, m in mats.items():
             sel = tag == k
             if sel.any():
                 rho[sel] = m.rho_dry + mt.theta(psi[sel], m) * 1000.0
-        unknown = set(np.unique(tag)) - set(mats)
-        if unknown:
-            raise ValueError(f"rho0_field: unmapped material tag(s) {unknown}")
+
+        # `material_tag` returns "outside" for a handful of boundary points
+        # even after the inward nudge -- e.g. sample_boundary puts pit_floor's
+        # topmost point marginally above z_ground. Nearest in-domain neighbour
+        # rather than a raise: rho_0 is a smooth field and these points are
+        # centimetres from a valid one, so refusing would block the mechanical
+        # BCs over a sampler rounding artefact. Anything beyond a few percent
+        # is a different problem and does raise.
+        bad = ~np.isfinite(rho)
+        if bad.any():
+            if bad.mean() > 0.05:
+                raise ValueError(
+                    f"rho0_field: {bad.sum()}/{bad.size} points have no "
+                    f"material ({sorted(set(np.unique(tag)) - set(mats))}). "
+                    f"More than 5% means the sampler and the geometry "
+                    f"disagree, not that a few points rounded out."
+                )
+            from scipy.spatial import cKDTree
+            good = ~bad
+            if not good.any():
+                raise ValueError("rho0_field: no point has a material tag")
+            _, j = cKDTree(np.column_stack([x[good], z[good]])).query(
+                np.column_stack([x[bad], z[bad]]))
+            rho[bad] = rho[good][j]
         return rho
 
     return field
 
 
 def attach_sigma0(coll, sig_fn=None, rho_fn=None, s: Scales = SCALES,
-                  max_miss_frac: float = 0.01):
+                  max_miss_frac: float = 0.01, nudge_m: float = 0.25):
     """Return `coll` with `sigma0` (N,3) and `rho0` (N,1) set, dimensionless.
 
     `coll.x, coll.z` are dimensionless; this multiplies back up by L_ref for
     the lookup, which is the single place that conversion happens, exactly as
     `swcc_from_material` is the single place psi* goes back to metres.
+
+    BOUNDARY SETS ARE NUDGED INWARD by `nudge_m` along -n before the lookup.
+    Boundary points lie exactly ON the FE mesh edge, and the point-in-triangle
+    test rejects them: 47.8% of boundary points miss. That is NOT chord sag --
+    refining the mesh 4x moves it to 47.4% -- it is the edge case itself. A
+    0.25 m offset takes the miss rate to 0.08%.
+
+    The cost is that sigma_0 is read 0.25 m inside the surface rather than on
+    it. sigma_0 is continuous, so the error is about rho*g*0.25 = 5 kPa
+    against a sigma_v that reaches 5.9 MPa -- 0.08%. It is largest in relative
+    terms at the crest, where sigma_v itself goes to zero; that is also where
+    the traction-free condition is least load-bearing.
+
+    Applied only when the Collocation carries normals, so interior sets are
+    untouched and their numbers do not move.
     """
     sig_fn = sig_fn if sig_fn is not None else sigma0_field()
     rho_fn = rho_fn if rho_fn is not None else rho0_field()
 
     xp = coll.x.detach().cpu().numpy().ravel() * s.L_ref
     zp = coll.z.detach().cpu().numpy().ravel() * s.L_ref
+
+    if coll.nx is not None and coll.nz is not None and nudge_m:
+        xp = xp - nudge_m * coll.nx.detach().cpu().numpy().ravel()
+        zp = zp - nudge_m * coll.nz.detach().cpu().numpy().ravel()
 
     sig_pa, n_miss = sig_fn(xp, zp)
     if n_miss > max_miss_frac * len(xp):

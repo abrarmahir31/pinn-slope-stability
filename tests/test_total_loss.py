@@ -25,7 +25,7 @@ SEED = 20250812
 MATS = load_materials()
 DTYPE = torch.float64
 TERMS = ("pde", "ic", "bc", "interface")
-MECH_TERMS = TERMS + ("pde_mech",)
+MECH_TERMS = TERMS + ("pde_mech", "bc_mech")
 
 
 @pytest.fixture(scope="module")
@@ -163,10 +163,21 @@ def test_include_mechanics_without_sigma0_refuses(net, bundle):
         call(net, bundle, include_mechanics=True)
 
 
-def test_include_mechanics_runs_once_sigma0_is_attached(net, bundle):
+def _with_sigma0(bundle):
+    """sigma_0 on the interior set AND on every boundary set.
+
+    L_BC_mech needs it on the boundaries too: the traction-free condition is
+    sigma_total . n = 0, and sigma_total starts from sigma_0. Attaching it to
+    the interior only used to be enough, which is why this helper exists
+    rather than an inline call.
+    """
     from src.sigma0 import attach_sigma0
-    coll = attach_sigma0(sample_interior(N, SEED))
-    b = dict(bundle, coll=coll)
+    bcs = {k: attach_sigma0(v) for k, v in bundle["bcs"].items()}
+    return dict(bundle, coll=attach_sigma0(sample_interior(N, SEED)), bcs=bcs)
+
+
+def test_include_mechanics_runs_once_sigma0_is_attached(net, bundle):
+    b = _with_sigma0(bundle)
     a, parts_off = call(net, b)
     c, parts_on = call(net, b, include_mechanics=True)
     assert "pde_mech" in parts_on and "pde_mech" not in parts_off
@@ -176,8 +187,7 @@ def test_include_mechanics_runs_once_sigma0_is_attached(net, bundle):
 def test_mechanics_off_is_bit_identical_to_before(net, bundle):
     """The ablation depends on the hydraulic half being untouched by the
     presence of the mechanical machinery."""
-    from src.sigma0 import attach_sigma0
-    b = dict(bundle, coll=attach_sigma0(sample_interior(N, SEED)))
+    b = _with_sigma0(bundle)
     a, _ = call(net, bundle)
     c, _ = call(net, b, include_mechanics=False)
     assert float(c.detach()) == float(a.detach())

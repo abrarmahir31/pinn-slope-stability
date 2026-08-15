@@ -58,6 +58,7 @@ from src.nondim import SCALES, Scales, mechanical_residual_nd, total_stress_nd
 
 __all__ = [
     "E_hat",
+    "total_stress_star",
     "psi0_star",
     "lame_hat",
     "psi_of",
@@ -215,6 +216,49 @@ def theta_of(psi_star: Tensor, mat, s: Scales = SCALES) -> Tensor:
 # ---------------------------------------------------------------------------
 # 6. The residual
 # ---------------------------------------------------------------------------
+def total_stress_star(fields, x, z, t, mat, *, sigma0_star=None,
+                      bishop: bool = True, s: Scales = SCALES):
+    """Assembled TOTAL stress at the given points, tension positive.
+
+        sigma_total = sigma_0 + D:eps - ( chi.psi - chi_0.psi_0 )
+
+    Returns ((sxx, szz, sxz), chi, (eps_xx, eps_zz, eps_xz)).
+
+    Shared by `mechanical_residual` (which takes its divergence) and by
+    `loss.L_BC_mech` (which dots it with the outward normal for the
+    traction-free condition). They MUST assemble the same tensor: a
+    traction-free boundary condition on a differently-built stress would be a
+    condition on a quantity the interior equation never sees, and the network
+    would satisfy both by making them disagree.
+    """
+    out = fields(x, z, t)
+    psi = psi_of(out)
+    u, v = uv_of(out)
+
+    eps_xx, eps_zz, eps_xz, _ = strain_star(u, v, x, z, s=s)
+    dsxx, dszz, dsxz = stress_increment_star(eps_xx, eps_zz, eps_xz, mat, s)
+
+    if sigma0_star is not None:
+        s0xx, s0zz, s0xz = sigma0_star
+        sxx, szz, sxz = dsxx + s0xx, dszz + s0zz, dsxz + s0xz
+    else:
+        sxx, szz, sxz = dsxx, dszz, dsxz
+
+    if bishop:
+        # Increment, not absolute: sigma_0 already carries chi_0*psi_0.
+        chi = chi_of(psi, mat, s)
+        psi0 = psi0_star(z, s)
+        pore = chi * psi - chi_of(psi0, mat, s) * psi0
+        ones = torch.ones_like(pore)
+        sxx = total_stress_nd(sxx, pore, ones, s)
+        szz = total_stress_nd(szz, pore, ones, s)
+        # No pore term on the shear component: the pore fluid carries no shear.
+    else:
+        chi = None
+
+    return (sxx, szz, sxz), chi, (eps_xx, eps_zz, eps_xz)
+
+
 def mechanical_residual(fields, x: Tensor, z: Tensor, t: Tensor, mat, *,
                         sigma0_star=None,
                         div_sigma0_star=None,
@@ -261,28 +305,9 @@ def mechanical_residual(fields, x: Tensor, z: Tensor, t: Tensor, mat, *,
     body_force : False drops gravity. Diagnostic only — use it to check that
         a term you expect to dominate actually does.
     """
-    out = fields(x, z, t)
-    psi = psi_of(out)
-    u, v = uv_of(out)
-
-    eps_xx, eps_zz, eps_xz, _ = strain_star(u, v, x, z, s=s)
-    dsxx, dszz, dsxz = stress_increment_star(eps_xx, eps_zz, eps_xz, mat, s)
-
-    if sigma0_star is not None:
-        s0xx, s0zz, s0xz = sigma0_star
-        sxx, szz, sxz = dsxx + s0xx, dszz + s0zz, dsxz + s0xz
-    else:
-        sxx, szz, sxz = dsxx, dszz, dsxz
-
-    if bishop:
-        # Increment, not absolute: sigma_0 already carries chi_0*psi_0.
-        chi = chi_of(psi, mat, s)
-        psi0 = psi0_star(z, s)
-        pore = chi * psi - chi_of(psi0, mat, s) * psi0
-        sxx = total_stress_nd(sxx, pore, torch.ones_like(pore), s)
-        szz = total_stress_nd(szz, pore, torch.ones_like(pore), s)
-    else:
-        chi = None
+    (sxx, szz, sxz), chi, (eps_xx, eps_zz, eps_xz) = total_stress_star(
+        fields, x, z, t, mat, sigma0_star=sigma0_star, bishop=bishop, s=s)
+    psi = psi_of(fields(x, z, t))
 
     div_x = grad(sxx, x) + grad(sxz, z)
     div_z = grad(sxz, x) + grad(szz, z)
