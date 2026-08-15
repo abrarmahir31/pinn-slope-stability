@@ -8,9 +8,10 @@ Repo rules honoured:
     silently vacuous;
   * analytic fields go through the same code path as the network.
 
-`test_bishop_sign_is_tension_positive` pins the stress convention settled in
-D-3.3.1. It is not a formula check — it is the guard that keeps
-`effective_stress_nd` and `mechanical_residual_nd` from drifting apart again.
+`test_total_stress_subtracts_the_pore_term` pins the stress convention settled
+in D-3.3.1 and CORRECTED in D-3.3.3. It checks the algebra in isolation; the
+equilibrium check that actually catches a wrong pore term lives in
+tests/test_initial_equilibrium.py.
 from __future__ import annotations"""
 
 import pytest
@@ -228,19 +229,51 @@ def test_bulk_density_ratio_rises_with_water_content():
 
 
 
-def test_bishop_sign_is_tension_positive():
-    """Positive pore pressure UNLOADS the skeleton. Tension-positive, that
-    means sigma_eff is MORE POSITIVE than sigma when psi > 0.
+def test_total_stress_subtracts_the_pore_term():
+    """Was `test_bishop_sign_is_tension_positive`, which asserted the OPPOSITE
+    and was wrong. See D-3.3.3.
 
-    `effective_stress_nd` returns sigma - Pi_M_couple*chi*psi, the
-    compression-positive form, which moves the wrong way here. Meanwhile
-    `mechanical_residual_nd`'s default e_z=(0,-1) is tension-positive. This
-    test says which convention the project follows."""
+    Tension positive. Bishop compression-positive is sigma_eff = sigma - chi*p;
+    converting (sigma_t = -sigma_c) gives effective = total + chi*p, hence
+
+        total = effective - chi*p
+
+    The constitutive law produces EFFECTIVE stress (D:eps is carried by the
+    skeleton) and equilibrium acts on TOTAL stress, so the residual needs this
+    direction and the sign is a subtraction. Positive pore pressure therefore
+    makes the total stress MORE COMPRESSIVE than the effective stress that
+    produced it.
+
+    The old test asserted the total->effective direction: a true statement
+    about a formula, and the wrong one for the caller. It passed because it
+    tested the function's name, and at the time there was no caller to
+    disagree with it."""
+    from src.nondim import total_stress_nd
+    sig_eff = torch.zeros(4, 1, dtype=torch.float64)
+    chi = torch.ones(4, 1, dtype=torch.float64)
+    wetter = torch.full((4, 1), 0.5, dtype=torch.float64)
+    drier = torch.full((4, 1), -0.5, dtype=torch.float64)
+    assert total_stress_nd(sig_eff, wetter, chi, SCALES).mean().item() < 0.0
+    assert total_stress_nd(sig_eff, drier, chi, SCALES).mean().item() > 0.0
+
+
+def test_zero_pore_increment_leaves_the_stress_alone():
+    """Negative control. At t = 0 the increment chi*psi - chi_0*psi_0 is
+    identically zero, so total must equal effective exactly -- which is what
+    makes the undeformed initial state an equilibrium."""
+    from src.nondim import total_stress_nd
+    sig = torch.linspace(-3.0, 1.0, 8, dtype=torch.float64).reshape(-1, 1)
+    zero = torch.zeros_like(sig)
+    assert torch.equal(total_stress_nd(sig, zero, torch.ones_like(sig), SCALES), sig)
+
+
+def test_effective_stress_nd_refuses_rather_than_forwarding():
+    """A silent alias would give numbers wrong twice over: flipped sign AND
+    absolute instead of incremental."""
     from src.nondim import effective_stress_nd
-    sigma = torch.zeros(4, 1, dtype=torch.float64)
-    psi = torch.full((4, 1), 0.5, dtype=torch.float64)     # below water table
-    chi = torch.ones_like(psi)
-    assert effective_stress_nd(sigma, psi, chi, SCALES).mean().item() > 0.0
+    with pytest.raises(NotImplementedError, match="D-3.3.3"):
+        effective_stress_nd(torch.zeros(2, 1), torch.zeros(2, 1),
+                            torch.ones(2, 1), SCALES)
 
 
 # ---------------------------------------------------------------------------

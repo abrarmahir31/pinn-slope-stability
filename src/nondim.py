@@ -194,15 +194,46 @@ def mechanical_residual_nd(div_sigma_eff_star, rho_ratio, e_z=(0.0, -1.0),
     return res_x, res_z
 
 
-def effective_stress_nd(sigma_star, psi_star, chi, s: Scales = SCALES):
-    """Dimensionless Bishop effective stress (isotropic pore term).
-    TENSION POSITIVE, fixed by mechanical_residual_nd's e_z=(0,-1) above.
+def total_stress_nd(sigma_eff_star, pore_star, chi, s: Scales = SCALES):
+    """Total stress from Bishop effective stress. TENSION POSITIVE (D-3.3.1).
 
-        sigma*_eff = sigma_star + s.Pi_M_couple * chi * psi_star   (on normal components)
+        sigma*_total = sigma*_eff  -  Pi_M_couple * chi * pore*   (normal comps)
 
-    chi ~ effective saturation Theta (Bishop parameter). psi* < 0 in suction.
+    DIRECTION MATTERS AND IS THE WHOLE POINT OF THE RENAME. Bishop in the
+    usual compression-positive form is sigma'_c = sigma_c - chi p. Converting
+    (sigma_t = -sigma_c) gives sigma'_t = sigma_t + chi p, i.e.
+
+        effective = total + chi p        total = effective - chi p
+
+    The constitutive law produces EFFECTIVE stress (sigma' = D:eps -- the
+    skeleton carries it), while equilibrium acts on TOTAL stress
+    (div sigma_total + rho_b g = 0). So the residual needs this direction, and
+    the sign is a subtraction.
+
+    D-3.3.1 briefly had this as an addition under the name
+    `effective_stress_nd`. That formula is the correct total->effective
+    converter; it was simply being called in the opposite direction, and
+    nothing caught it because at the time the function had no call sites at
+    all. The name now states the direction so the mistake is not re-typable.
+
+    `pore_star` is an INCREMENT, chi*psi* - chi_0*psi_0*, not the absolute
+    suction -- see mechanics.mechanical_residual. This function does not know
+    that; it only applies the sign. Passing chi and pore separately is kept so
+    the Bishop parameter stays visible at the call site.
     """
-    return sigma_star + s.Pi_M_couple * chi * psi_star
+    return sigma_eff_star - s.Pi_M_couple * chi * pore_star
+
+
+def effective_stress_nd(*args, **kwargs):
+    """REMOVED in D-3.3.3. Use `total_stress_nd`.
+
+    Not an alias: the sign flipped and the argument is now an increment, so a
+    silent forward would produce plausible numbers that are wrong twice over.
+    """
+    raise NotImplementedError(
+        "effective_stress_nd was replaced by total_stress_nd in D-3.3.3. The "
+        "sign and the argument both changed; see DECISIONS.md D-3.3.3."
+    )
 
 
 def darcy_flux_nd(K_star, dpsi_dx_star, dpsi_dz_star, s: Scales = SCALES):

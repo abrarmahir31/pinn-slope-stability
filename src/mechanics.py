@@ -3,7 +3,7 @@ src/mechanics.py — mechanical residual, autograd layer only.
 ============================================================
 
 Same design rule as `residuals.py`: the algebra lives in `nondim.py`
-(`mechanical_residual_nd`, `effective_stress_nd`) and in `coupling.py`. This
+(`mechanical_residual_nd`, `total_stress_nd`) and in `coupling.py`. This
 module differentiates and hands over. It does not re-derive equilibrium, and
 it does not reimplement the constitutive model — chi and theta come from
 `materials.Se` / `materials.theta`.
@@ -19,12 +19,15 @@ boundaries:
     COMPRESSION-POSITIVE Pa. `sigma0_star_from_geostatic` below is the only
     place in the project that flips them.
 
-  * `nondim.effective_stress_nd` as shipped is compression-positive
-    (`sigma - Pi_M_couple*chi*psi`), while `nondim.mechanical_residual_nd`
-    with its default `e_z=(0,-1)` is tension-positive. They disagree. Neither
-    has ever been called or tested, so the convention is unpinned and free to
-    choose. See docs/step33_fixes.md Fix 1. Until it is applied,
-    `tests/test_coupling.py::test_bishop_sign_is_tension_positive` xfails.
+  * The pore term is a SUBTRACTION and an INCREMENT:
+
+        sigma_total = sigma_0 + D:eps - ( chi.psi - chi_0.psi_0 )
+
+    sigma_0 from the FE gravity solve is a TOTAL stress (wet density, no pore
+    term), so the initial pore state is already inside it and adding the
+    absolute chi.psi counts it twice. Both facts are pinned by
+    tests/test_initial_equilibrium.py; before D-3.3.3 the residual at the
+    exact initial state was 0.604 in Mk rather than zero.
 
 WHY THE STRESS SCALING IS CLEAN
 -------------------------------
@@ -48,12 +51,14 @@ import torch
 from torch import Tensor
 
 from src import materials as _m
+from src.step21_geometry.boundaries import Z_WT
 from src.coupling import bishop_chi, bulk_density_ratio
 from src.derivatives import grad
-from src.nondim import SCALES, Scales, effective_stress_nd, mechanical_residual_nd
+from src.nondim import SCALES, Scales, mechanical_residual_nd, total_stress_nd
 
 __all__ = [
     "E_hat",
+    "psi0_star",
     "lame_hat",
     "psi_of",
     "uv_of",
@@ -176,6 +181,25 @@ def sigma0_star_from_geostatic(sig_v_pa, sig_h_pa, sig_xz_pa=None,
 # ---------------------------------------------------------------------------
 # 5. Constitutive lookups — psi* in, physical units handled here
 # ---------------------------------------------------------------------------
+def psi0_star(z_star: Tensor, s: Scales = SCALES) -> Tensor:
+    """Initial suction head, dimensionless, DIFFERENTIABLE in z*.
+
+        psi_0 = Z_WT - z          (initial.psi_initial, hydrostatic)
+
+    Restated analytically here rather than looked up, because the pore term
+    enters the residual through `div`: what the equilibrium equation sees is
+    grad(chi_0 psi_0), and a cached or detached psi_0 has no gradient. Doing
+    that produces a residual identical to the absolute-pore-term bug it was
+    meant to fix, which is how one debugging round was lost.
+
+    `test_psi0_star_matches_the_initial_condition_module` binds this to
+    `initial.psi_initial` so the two cannot drift. Z_WT = 197 < Z_BASE = 200,
+    so psi_0 < 0 everywhere -- Section 5 is entirely unsaturated at t = 0 and
+    chi_0 is well below 1, which is why the increment matters at all.
+    """
+    return (Z_WT - z_star * s.L_ref) / s.H_ref
+
+
 def chi_of(psi_star: Tensor, mat, s: Scales = SCALES) -> Tensor:
     """Bishop chi = Se(psi). psi* is multiplied back up by H_ref because the
     van Genuchten alpha is in 1/m — the same single-line convention as
@@ -251,9 +275,12 @@ def mechanical_residual(fields, x: Tensor, z: Tensor, t: Tensor, mat, *,
         sxx, szz, sxz = dsxx, dszz, dsxz
 
     if bishop:
+        # Increment, not absolute: sigma_0 already carries chi_0*psi_0.
         chi = chi_of(psi, mat, s)
-        sxx = effective_stress_nd(sxx, psi, chi, s)
-        szz = effective_stress_nd(szz, psi, chi, s)
+        psi0 = psi0_star(z, s)
+        pore = chi * psi - chi_of(psi0, mat, s) * psi0
+        sxx = total_stress_nd(sxx, pore, torch.ones_like(pore), s)
+        szz = total_stress_nd(szz, pore, torch.ones_like(pore), s)
     else:
         chi = None
 
