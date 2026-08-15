@@ -14,7 +14,8 @@ import numpy as np
 import torch  # type: ignore
 
 from src.nondim import SCALES, Scales
-from src.mechanics import mechanical_residual
+from src.coupling import KC_DEFAULT, KC_OFF, KCConfig, kozeny_carman_factor
+from src.mechanics import mechanical_residual, strain_star
 from src.residuals import richards_residual, darcy_flux, interface_flux_jump
 from src.sampling import load_initial
 from src.step21_geometry import boundaries as bnd
@@ -88,8 +89,30 @@ def _psi_field(net):
     return fields
 
 
+def _kc_factor(net, x, z, t, mat, kc: KCConfig, tag: str, s: Scales):
+    """Kozeny-Carman conductivity multiplier at these points, or None.
+
+    None -- not a tensor of ones -- when the feedback is off for this stratum.
+    `richards_residual` then takes the identical code path it took before the
+    argument existed, which is what makes the one-way arm of the Step 6.2
+    ablation a genuine reproduction rather than a numerically-close rerun.
+
+    eps_v is requested in PHYSICAL units. Kozeny-Carman consumes true strain;
+    eps_v* is larger by L_ref/U_ref = 100, and passing the wrong one inflates
+    the feedback hundredfold while changing nothing else visible.
+
+    The returned tensor carries its graph. That graph IS the coupling: it is
+    the path by which the Richards residual comes to depend on u*, v*.
+    """
+    if not kc.is_on(tag):
+        return None
+    u, v = uv_of(net(x, z, t)).split(1, dim=1)
+    eps_v = strain_star(u, v, x, z, physical=True, s=s)[3]
+    return kozeny_carman_factor(mat.n0, eps_v, kc, tag=tag)
+
+
 def L_PDE(net, coll, mats, s: Scales = SCALES, normalise: str = "none",
-          per_tag: bool = False):
+          per_tag: bool = False, kc: KCConfig = KC_OFF):
     """mean_w[R_Richards^2] over the interior collocation set.
 
     Split by coll.tag: richards_residual takes ONE material, and Mk /
@@ -121,7 +144,9 @@ def L_PDE(net, coll, mats, s: Scales = SCALES, normalise: str = "none",
         xs, zs, ts = coll.x[m], coll.z[m], coll.t[m]
 
         R = richards_residual(fields, xs, zs, ts, mats[tag],
-                              s=s, normalise=normalise)
+                              s=s, normalise=normalise,
+                              k_factor=_kc_factor(net, xs, zs, ts, mats[tag],
+                                                  kc, tag, s))
 
         contrib = (w_all[m] * R.pow(2)).sum()
         total = total + contrib
@@ -362,6 +387,7 @@ DEFAULT_WEIGHTS = {
 def total_loss(net, coll, bcs, ic, ifaces, mats, s: Scales = SCALES,
                weights: dict | None = None,
                include_mechanics: bool = False,
+               include_feedback: bool = False,
                per_term: bool = False):
     """Weighted sum of the hydraulic loss terms.
 
@@ -370,6 +396,17 @@ def total_loss(net, coll, bcs, ic, ifaces, mats, s: Scales = SCALES,
     entries that sum to the scalar. With `per_term=True` it also carries each
     term's own breakdown (per-tag, per-segment, per-contact).
 
+    include_feedback
+        Adds the Kozeny-Carman porosity-strain feedback into K*, i.e. the
+        hydraulic half of two-way coupling. False gives the one-way arm of the
+        Step 6.2 ablation and is bit-for-bit the pre-Step-3.3 hydraulic loss.
+        True uses `coupling.KC_DEFAULT` -- feedback on the marls, off for Tm
+        (D-3.3.2).
+
+        Independent of `include_mechanics`: feedback needs displacements to be
+        meaningful, but it does not need the equilibrium residual to be in the
+        loss, and separating them is what makes the ablation a 2x2 rather than
+        a single switch.
     include_mechanics
         Adds the equilibrium residual (Step 3.3a). Requires a Collocation with
         sigma_0 attached; see sigma0.attach_sigma0.
@@ -395,7 +432,8 @@ def total_loss(net, coll, bcs, ic, ifaces, mats, s: Scales = SCALES,
             )
         w.update(weights)
 
-    pde, pde_parts = L_PDE(net, coll, mats, s, per_tag=per_term)
+    kc = KC_DEFAULT if include_feedback else KC_OFF
+    pde, pde_parts = L_PDE(net, coll, mats, s, per_tag=per_term, kc=kc)
     icl, ic_parts = L_IC(net, *ic)
     bc, bc_parts = L_BC(net, bcs, mats, s, per_segment=per_term)
     iface, if_parts = L_interface(net, ifaces, mats, s, per_contact=per_term)

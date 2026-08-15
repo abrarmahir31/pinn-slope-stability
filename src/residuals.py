@@ -108,7 +108,7 @@ def _psi_of(out):
 # ---------------------------------------------------------------------------
 def richards_residual(fields, x: Tensor, z: Tensor, t: Tensor, mat,
                       s: Scales = SCALES, normalise: str = "none",
-                      return_terms: bool = False):
+                      return_terms: bool = False, k_factor: Tensor | None = None):
     """Dimensionless mixed-form Richards residual at the given points.
 
         R = C* dpsi*/dt*  -  Pi_R_diff div*[K* grad* psi*]  -  Pi_R_grav dK*/dz*
@@ -139,6 +139,23 @@ def richards_residual(fields, x: Tensor, z: Tensor, t: Tensor, mat,
     return_terms : also return the three terms separately, undivided. Use this
         to produce the Pi-group magnitude table for the methods section —
         it reports what the optimiser actually sees.
+    k_factor : optional (N,1) multiplier on K*, the hydraulic half of two-way
+        coupling (Step 3.3). None is the one-way path and is bit-for-bit what
+        this function did before the argument existed — see
+        `test_k_factor_none_and_ones_are_identical`.
+
+        This module knows nothing about mechanics and must not: the factor
+        arrives already computed, from `coupling.kozeny_carman_factor` via
+        `loss.L_PDE`. What it MUST carry is its graph, because that graph is
+        the feedback path — detach it and the Richards residual stops
+        depending on u*, v* and the coupling is silently one-way again.
+
+        The factor multiplies K* BEFORE the derivatives are taken, so
+        div*[K* grad* psi*] and dK*/dz* both pick up the strain-induced
+        conductivity gradient through autograd. That is correct and is why
+        the assembled form is used here rather than the expanded one:
+        `richards_residual_expanded` cannot accept a k_factor, because its
+        analytic chain rule assumes K = K(psi) alone.
 
     Notes
     -----
@@ -153,6 +170,15 @@ def richards_residual(fields, x: Tensor, z: Tensor, t: Tensor, mat,
 
     K = swcc.K_star(psi)
     C = swcc.C_star(psi)
+
+    if k_factor is not None:
+        if k_factor.shape != K.shape:
+            raise ValueError(
+                f"k_factor has shape {tuple(k_factor.shape)}, expected "
+                f"{tuple(K.shape)}. A broadcastable-but-wrong shape here "
+                f"would silently apply one stratum's feedback everywhere."
+            )
+        K = K * k_factor
 
     dpsi_dt = grad(psi, t)
     dpsi_dx = grad(psi, x)
@@ -189,7 +215,7 @@ def richards_residual(fields, x: Tensor, z: Tensor, t: Tensor, mat,
 
 
 def richards_residual_expanded(fields, x: Tensor, z: Tensor, t: Tensor, mat,
-                               s: Scales = SCALES):
+                               s: Scales = SCALES, k_factor: Tensor | None = None):
     """Same residual, product rule written out. Cross-check only.
 
         div[K grad psi] = K (d2psi/dx2 + d2psi/dz2)
@@ -200,11 +226,31 @@ def richards_residual_expanded(fields, x: Tensor, z: Tensor, t: Tensor, mat,
     because a reviewer asking "did you expand it correctly?" gets an answer.
     Do not use it in training — it is one extra graph traversal for nothing.
     """
+    if k_factor is not None:
+        raise NotImplementedError(
+            "richards_residual_expanded cannot take a k_factor. It expands "
+            "div[K grad psi] analytically as K*lap(psi) + dK/dpsi*|grad psi|^2, "
+            "which assumes K depends on position ONLY through psi. With "
+            "Kozeny-Carman, K also depends on eps_v(u,v), so that expansion "
+            "is missing dK/deps_v * grad(eps_v) . grad(psi). Silently ignoring "
+            "the factor would make the cross-check against richards_residual "
+            "pass while comparing two different equations."
+        )
+
     psi = _psi_of(fields(x, z, t))
     swcc = _as_swcc(mat, s)
 
     K = swcc.K_star(psi)
     C = swcc.C_star(psi)
+
+    if k_factor is not None:
+        if k_factor.shape != K.shape:
+            raise ValueError(
+                f"k_factor has shape {tuple(k_factor.shape)}, expected "
+                f"{tuple(K.shape)}. A broadcastable-but-wrong shape here "
+                f"would silently apply one stratum's feedback everywhere."
+            )
+        K = K * k_factor
 
     dpsi_dt = grad(psi, t)
     dpsi_dx = grad(psi, x)
