@@ -129,3 +129,23 @@ of a constant that properties.py defines authoritatively.
 - [x] dtheta_ref provenance: it IS the literature Mk theta_s 0.38 - 0.05.
       Now derived from properties.THETA_S/THETA_R rather than a literal.
       The 0.377 figure in the old note (theta_s := n0) was stale.
+
+## OPEN (2026-08-13, high) — Bishop pore term is absolute, and probably wrong-signed
+
+At the true initial state (u=v=0, psi=psi_0, equilibrated sigma_0) the
+mechanical residual must vanish. With bishop=False it does. With bishop=True
+it gives |res_z| median 0.604 (Mk), 0.579 (Mk_d) -- ~20% of Pi_M_body.
+
+Cause 1: the pore term uses absolute chi*psi. sigma_0 is a TOTAL stress, so
+the increment chi*psi - chi_0*psi_0 is what belongs there. Verified: with the
+increment the residual is exactly 0.0 in all three strata. chi_0*psi_0 must
+enter DIFFERENTIABLY -- the term acts through div, so a detached psi_0 changes
+nothing.
+
+Cause 2: D-3.3.1 flipped effective_stress_nd to sigma + Pi*chi*psi. Tension
+positive, sigma' = sigma + chi*p, so total = sigma' - chi*p. D:eps is
+effective; equilibrium acts on total; the residual should SUBTRACT. The Fix 1
+formula is a correct total->effective converter used in the wrong direction.
+
+Do not run coupled training until both are resolved. Blocks the traction-free
+BCs, which are a condition on TOTAL stress.
