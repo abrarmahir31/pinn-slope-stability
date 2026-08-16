@@ -550,8 +550,8 @@ class LossBalancer:
             lines.append(f"{k:<16}{g:>13.4e}{self.w0[k]:>12.3e}"
                          f"{self.c[k]:>12.3e}{w[k]:>12.3e}"
                          f"{w[k] * g:>15.4e}  {flag}")
-        live = [w[k] * self._last_norms.get(k, 0.0) for k in self.terms
-                if self._last_norms.get(k, 0.0) > 0]
+        live = [w[k] * self._last_norms[k] for k in self.terms
+                if k not in self._frozen and self._last_norms.get(k, 0.0) > 0]
         if live:
             lines.append(f"  weighted-gradient spread: "
                          f"{max(live) / min(live):.3e}   (target 1)")
