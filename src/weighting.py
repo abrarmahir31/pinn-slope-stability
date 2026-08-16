@@ -366,6 +366,19 @@ def pi_seed(pi_m: float = _PI_M_BODY, pi_r: float = _PI_R_GRAV
 
 
 PI_SEED = pi_seed()
+#: Architecture-dependent override for the 8x64 production network.
+#: Measured 16 Aug, N = 3000, seed 20250812: pde_mech's gradient norm is
+#: 5.18e+02 against the anchor's 1.52e-03, i.e. 342,000x. Second derivatives
+#: of u*, v* compound through eight tanh layers; at 2x64 the same term sits
+#: 386x BELOW the anchor. The required w^ = 2.925e-06 is outside the +/-3
+#: order clip on c, so without this seed the balancer clamps at c = 1e-3 and
+#: leaves pde_mech ~340x over-weighted for the whole run.
+#:
+#: This makes explicit that D-W.2's premise -- bc_mech holds the largest
+#: gradient -- is ARCHITECTURE-DEPENDENT. True at 2x64, false by five orders
+#: at 8x64. The anchor-vs-geomean comparison that settled D-W.2 was run at
+#: 2x64 and must be repeated at 8 before any production run.
+PI_SEED_8X64 = dict(PI_SEED, pde_mech=2.925e-06)
 
 
 @dataclass

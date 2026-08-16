@@ -183,6 +183,8 @@ def main(argv=None) -> int:
                          "regime fit (D-W.0b). 500 is the recommended value.")
     ap.add_argument("--anchor", default="bc_mech")
     ap.add_argument("--seed", type=int, default=20250812)
+    ap.add_argument("--n-layers", type=int, default=2)
+    ap.add_argument("--n-neurons", type=int, default=64)
     ap.add_argument("--n", type=int, default=300,
                     help="collocation points per set. 300 matches the "
                          "baseline note; 3000 for a stable measurement.")
@@ -192,11 +194,11 @@ def main(argv=None) -> int:
 
     global build, losses_at
     if a.selftest:
-        build = lambda s, n=None: _selftest_build(s)    # noqa: E731
+        build = lambda s, n=None, *a_, **k_: _selftest_build(s)   # noqa: E731
         losses_at = lambda n, f, c, feedback=True: f(n, c)    # noqa: E731
         print("*** --selftest: synthetic loss, NOT the Isikdere physics ***\n")
 
-    net, loss_fn, colloc = build(a.seed, a.n)
+    net, loss_fn, colloc = build(a.seed, a.n, a.n_layers, a.n_neurons)
     L0, g0 = snapshot(net, loss_fn, colloc)
 
     missing = [k for k in TERMS if k not in L0]
