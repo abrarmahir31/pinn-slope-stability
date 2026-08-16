@@ -77,33 +77,36 @@ GradNorm's alpha-exponent rate term is implemented but OFF by default
 (`alpha=0.0`). Turn it on only once every term has a nonzero baseline --
 realistically after the first drawdown step, not before.
 
-D-W.2 -- anchor on bc_mech; every other weight climbs to meet it
-----------------------------------------------------------------
-The note establishes that bc_mech is large because the cut face is genuinely
-out of equilibrium at t = 0 (cut_face 5.70e-03, 13x natural_ground) and that
-suppressing it would suppress the constraint on the failure surface. So
-w_bc_mech is PINNED AT 1.0 and never updated; balance is reached by raising
-the others. The scheme is then monotone in the safe direction -- it can
-never quietly turn the mechanical boundary off.
+D-W.2 -- anchor on bc_mech. Measured, not derived.
+----------------------------------------------------
+Three targets were run to 1000 epochs at N = 500 (toy run, 16 Aug):
 
-    Rejected: target = geometric mean of the active norms. It is the
-    scale-free centre and it keeps the total loss scale fixed, which is
-    tidier. But on this spread it puts bc_mech BELOW 1 -- it weights the
-    cut-face constraint down for the sole reason that it is large, the exact
-    move the note forbids. `target="geomean"` is implemented and tested so
-    the comparison can be run and reported, but it is not the default and
-    should not be adopted without re-arguing D-W.2.
+    target     bc_mech  pde_mech  pde_richards    bc   ic_head  spread
+    anchor       0.908      3.66      3.75e-04  7.7e-4  1.5e-3      41
+    geomean      0.438      3840          57.7     182    20.1     127
+    unit (ref)   0.866   (500 st)          1837     123    1.77   3.7e5
 
-Two costs of anchoring, stated because both will look like bugs:
-  * the total loss RISES. At p = 1 it goes 1.46e-3 -> 8.75e-3 (each term
-    contributes 1.459e-3 by construction); at p = 0.5, 1.46e-3 -> 1.53e-3.
-    The Step 4.1 learning-rate schedule is calibrated against the weighted
-    loss, not the unit-weight one.
-  * the loss-VALUE spread does not close. Under exact gradient balance at
-    p = 0.5, w_i L_i = sqrt(L_a L_i): the 8-order spread halves to 4 and
-    stays there. That is correct. Anyone monitoring only the total loss will
-    conclude the weighting did nothing; the quantity to monitor is w_i g_i,
-    which `report()` prints, along with its spread.
+anchor wins on every term but bc_mech. geomean drives EVERY other term
+above its starting value and pins pde_mech at the clip.
+
+WHAT ANCHORING DOES NOT GIVE YOU. An earlier draft claimed the scheme is
+monotone upward -- every weight climbs to meet a pinned anchor, so the
+cut-face constraint can never be suppressed. That is false in training.
+bc_mech holds the largest gradient at t = 0 but not after: by epoch 1000
+pde_mech's gradient is 4-5x the anchor's, so it gets c = 0.244 and ends
+3.66x worse than it started. The mechanical PDE IS being suppressed, and
+the scheme has no guarantee preventing it.
+
+Two-way coupling is not the cause. With include_feedback=False the climb
+is 4.19x, slightly WORSE, so it is not psi moving the Bishop term and
+rho_b. It is the anchor: bc_mech barely moves (0.908x over 1000 epochs)
+while every other term changes by orders, so anchoring to it means
+anchoring to the one term that is not learning.
+
+Accepted as the best available trade -- five of six terms improve by one
+to four orders against one degrading 3.7x -- and flagged, not resolved.
+See open_items: a per-step anchor (argmax g_i) or SA-PINN pointwise
+weights would both remove the fixed-anchor assumption.
 
 D-W.3 -- log-space EMA on a CORRECTION FACTOR, hard clip
 --------------------------------------------------------

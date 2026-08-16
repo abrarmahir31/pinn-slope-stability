@@ -149,3 +149,9 @@ formula is a correct total->effective converter used in the wrong direction.
 
 Do not run coupled training until both are resolved. Blocks the traction-free
 BCs, which are a condition on TOTAL stress.
+
+- [ ] D-W.2 anchor is fixed at t = 0 but bc_mech is not the largest-
+      gradient term during training (pde_mech reaches 4-5x it). pde_mech
+      ends 3.66x worse. Not coupling -- include_feedback=False gives
+      4.19x. geomean is worse on every term. Try argmax-g anchor
+      re-selected at each update, or SA-PINN pointwise weights.
