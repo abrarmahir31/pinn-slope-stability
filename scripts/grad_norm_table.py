@@ -57,42 +57,23 @@ from src.weighting import (PI_SEED, TERMS, BalancerConfig, format_table,
 # already fooled the Step 3.3b tests once.
 # ===========================================================================
 
-def build(seed: int = 20250812, N: int = 300):
-    import torch
+def build(seed: int = 20250812, N: int = 300,
+          n_layers: int = 2, n_neurons: int = 64):
+    import dataclasses
+    from src.config import BOUNDS, tiny
     from src.loss import ic_targets
     from src.materials import load_materials
+    from src.model import PINN, NearPhysical
     from src.sampling import (sample_boundary, sample_interfaces,
                               sample_interior)
     from src.sigma0 import attach_sigma0
-    from src.nondim import SCALES
 
-    DTYPE = torch.float64
-
-    class Step33Net(torch.nn.Module):
-        """2x64 tanh, initialised near the physical state (6cbd402).
-
-        psi* = psi_0* + 3e-3*net,  u*,v* = 1e-3*net.
-        psi_0* is the Step 2.3 IC: psi = -(z - z_wt), z_wt = 197.0 m a.s.l.,
-        non-dimensionalised by H_ref. Without this offset the raw net emits
-        psi* ~ 1 = 165 m suction and the whole table is meaningless.
-        """
-        Z_WT = 197.0
-
-        def __init__(self, seed=seed, s=SCALES):
-            super().__init__()
-            torch.manual_seed(seed)
-            self.s = s
-            self.net = torch.nn.Sequential(
-                torch.nn.Linear(3, 64), torch.nn.Tanh(),
-                torch.nn.Linear(64, 64), torch.nn.Tanh(),
-                torch.nn.Linear(64, 3),
-            ).to(DTYPE)
-
-        def forward(self, x, z, t):
-            raw = self.net(torch.cat([x, z, t], dim=1))
-            psi0 = -(z * self.s.L_ref - self.Z_WT) / self.s.H_ref
-            return torch.cat([psi0 + 3e-3 * raw[:, 0:1],
-                              1e-3 * raw[:, 1:3]], dim=1)
+    # tiny() as the base so dtype/device/activation match the rest of the
+    # repo; only shape and seed are overridden. n_layers=2, n_neurons=64
+    # reproduces the Step 3.3 diagnostic network.
+    cfg = dataclasses.replace(tiny(), n_layers=n_layers,
+                              n_neurons=n_neurons, seed=seed)
+    net = NearPhysical(PINN(cfg, BOUNDS))
 
     coll = sample_interior(N, seed)
     attach_sigma0(coll)
@@ -102,16 +83,17 @@ def build(seed: int = 20250812, N: int = 300):
 
     loss_fn = dict(bcs=bcs, ic=ic_targets(),
                    ifaces=sample_interfaces(N, seed), mats=load_materials())
-    return Step33Net(), loss_fn, coll
+    return net, loss_fn, coll
 
 
-def losses_at(net, loss_fn, colloc):
-    from src.coupling import KC_DEFAULT
+def losses_at(net, loss_fn, colloc, feedback=True):
+    from src.coupling import KC_DEFAULT, KC_OFF
     from src.loss import L_BC, L_BC_mech, L_IC, L_PDE, L_PDE_mech, L_interface
 
     b, mats = loss_fn, loss_fn["mats"]
     out = {
-        "pde_richards": L_PDE(net, colloc, mats, kc=KC_DEFAULT)[0],
+        "pde_richards": L_PDE(net, colloc, mats,
+                              kc=KC_DEFAULT if feedback else KC_OFF)[0],
         "pde_mech":     L_PDE_mech(net, colloc, mats)[0],
         "bc":           L_BC(net, b["bcs"], mats)[0],
         "bc_mech":      L_BC_mech(net, b["bcs"], mats)[0],
@@ -211,7 +193,7 @@ def main(argv=None) -> int:
     global build, losses_at
     if a.selftest:
         build = lambda s, n=None: _selftest_build(s)    # noqa: E731
-        losses_at = lambda n, f, c: f(n, c)             # noqa: E731
+        losses_at = lambda n, f, c, feedback=True: f(n, c)    # noqa: E731
         print("*** --selftest: synthetic loss, NOT the Isikdere physics ***\n")
 
     net, loss_fn, colloc = build(a.seed, a.n)

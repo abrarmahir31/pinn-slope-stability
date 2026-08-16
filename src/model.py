@@ -79,3 +79,40 @@ class PINN(nn.Module):
         return (f"PINN {self.cfg.n_layers}x{self.cfg.n_neurons} "
                 f"{self.cfg.activation} | {self.n_parameters():,} params | "
                 f"{self.cfg.dtype} on {self.device}")
+
+class NearPhysical(nn.Module):
+    """PINN offset to start at the physical state (the 6cbd402 init).
+
+        psi* = psi_0* + eps_psi * net,   u*, v* = eps_uv * net
+
+    psi_0* is the Step 2.3 IC, psi = -(z - z_wt), z_wt = 197.0 m a.s.l.,
+    non-dimensionalised by H_ref. Without it the raw net emits psi* ~ 1,
+    i.e. 165 m of suction, where van Genuchten K_r is numerically zero and
+    every flux term collapses twelve orders -- the regime that fooled the
+    Step 3.3b tests. The Step 3.4 weights are only valid for this init.
+
+    Wraps rather than subclasses so PINN keeps its "contains no physics"
+    property: the IC is Step 2.3's, and it lives here.
+    """
+    Z_WT = 197.0
+
+    def __init__(self, pinn, s=None, eps_psi=3e-3, eps_uv=1e-3):
+        super().__init__()
+        from src.nondim import SCALES
+        self.pinn = pinn
+        self.s = s or SCALES
+        self.eps_psi, self.eps_uv = eps_psi, eps_uv
+
+    @property
+    def device(self):
+        return self.pinn.device
+
+    def summary(self):
+        return (f"{self.pinn.summary()} | near-physical init "
+                f"(eps_psi={self.eps_psi:g}, eps_uv={self.eps_uv:g})")
+
+    def forward(self, x, z, t):
+        raw = self.pinn(x, z, t)
+        psi0 = -(z * self.s.L_ref - self.Z_WT) / self.s.H_ref
+        return torch.cat([psi0 + self.eps_psi * raw[:, 0:1],
+                          self.eps_uv * raw[:, 1:3]], dim=1)

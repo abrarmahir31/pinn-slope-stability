@@ -77,36 +77,35 @@ GradNorm's alpha-exponent rate term is implemented but OFF by default
 (`alpha=0.0`). Turn it on only once every term has a nonzero baseline --
 realistically after the first drawdown step, not before.
 
-D-W.2 -- anchor on bc_mech. Measured, not derived.
-----------------------------------------------------
-Three targets were run to 1000 epochs at N = 500 (toy run, 16 Aug):
+D-W.2 -- anchor on bc_mech; every other weight climbs to meet it
+----------------------------------------------------------------
+bc_mech is large because the cut face is genuinely out of equilibrium at
+t = 0 (cut_face 5.70e-03, 13x natural_ground), and suppressing it would
+suppress the constraint on the failure surface. So w_bc_mech is PINNED at
+1.0 and never updated; balance is reached by raising the others. It holds
+the largest gradient at initialisation (pde_mech, the next largest, is
+386x below it), so every weight climbs and the scheme cannot quietly turn
+the mechanical boundary off.
 
-    target     bc_mech  pde_mech  pde_richards    bc   ic_head  spread
-    anchor       0.908      3.66      3.75e-04  7.7e-4  1.5e-3      41
-    geomean      0.438      3840          57.7     182    20.1     127
-    unit (ref)   0.866   (500 st)          1837     123    1.77   3.7e5
+MEASURED, 1000 epochs at N = 500 (16 Aug), ratio of final to initial loss:
 
-anchor wins on every term but bc_mech. geomean drives EVERY other term
-above its starting value and pins pde_mech at the clip.
+    target     bc_mech  pde_mech  pde_richards      bc  ic_head  ic_disp
+    anchor       0.973  7.13e-05      4.58e-03  1.9e-3   4.3e-3    0.055
+    geomean      0.775      1.28      2.42e-03  9.6e-3     32.2     3.21
 
-WHAT ANCHORING DOES NOT GIVE YOU. An earlier draft claimed the scheme is
-monotone upward -- every weight climbs to meet a pinned anchor, so the
-cut-face constraint can never be suppressed. That is false in training.
-bc_mech holds the largest gradient at t = 0 but not after: by epoch 1000
-pde_mech's gradient is 4-5x the anchor's, so it gets c = 0.244 and ends
-3.66x worse than it started. The mechanical PDE IS being suppressed, and
-the scheme has no guarantee preventing it.
+anchor improves every term. geomean makes ic_head 32x worse, ic_disp 3.2x
+worse, pde_mech 1.28x worse, and pins pde_mech at the clip. Rejected.
 
-Two-way coupling is not the cause. With include_feedback=False the climb
-is 4.19x, slightly WORSE, so it is not psi moving the Bishop term and
-rho_b. It is the anchor: bc_mech barely moves (0.908x over 1000 epochs)
-while every other term changes by orders, so anchoring to it means
-anchoring to the one term that is not learning.
-
-Accepted as the best available trade -- five of six terms improve by one
-to four orders against one degrading 3.7x -- and flagged, not resolved.
-See open_items: a per-step anchor (argmax g_i) or SA-PINN pointwise
-weights would both remove the fixed-anchor assumption.
+    SUPERSEDED, 15-16 Aug: an intermediate version of this block reported
+    pde_mech climbing to 3.66x and being suppressed to c = 0.244, and
+    concluded the monotone-upward property was false. That was measured on
+    a hand-rolled diagnostic network that fed raw x*, z*, t* to tanh. t*
+    runs to 30, tanh saturates past |x| ~ 3, and the derivative pathways
+    through t were dead -- pde_mech, which needs second derivatives, was
+    the term most affected. On src.model.PINN, which scales inputs to
+    [-1, 1], pde_mech ends at 7.13e-05 rather than 3.66x. The
+    include_feedback=False comparison from the same session (4.19x vs
+    3.66x) measured the same artefact and says nothing about coupling.
 
 D-W.3 -- log-space EMA on a CORRECTION FACTOR, hard clip
 --------------------------------------------------------
@@ -285,8 +284,12 @@ def regime_exponents(snap_a: Tuple[Mapping[str, float], Mapping[str, float]],
         if k not in Lb or k not in ga or k not in gb:
             continue
         l0, l1, g0, g1 = La[k], Lb[k], ga[k], gb[k]
+        l0, l1, g0, g1 = La[k], Lb[k], ga[k], gb[k]
         if min(l0, l1, g0, g1) <= 0:
             continue
+        gmax = max(max(ga.values()), max(gb.values()))
+        if g0 < 1e-12 * gmax or g1 < 1e-12 * gmax:
+            continue            # inactive; fitting two ~1e-27 numbers
         den = math.log(l1 / l0)
         if abs(den) < 1e-9:            # term did not move; no information
             continue
@@ -558,7 +561,7 @@ class LossBalancer:
         if live:
             lines.append(f"  weighted-gradient spread: "
                          f"{max(live) / min(live):.3e}   (target 1)")
-        if self.snapshots:
+        if self.snapshots and self._n_updates <= 1:
             p = regime_exponents(self.snapshots[0], self.snapshots[-1])
             if p:
                 lines.append("  regime exponents p "

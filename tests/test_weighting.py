@@ -408,3 +408,12 @@ def test_seed_mismatch_on_resume_is_an_error(toy):
     other = LossBalancer(TERMS, net.parameters())      # default PI_SEED
     with pytest.raises(ValueError, match="seed differs"):
         other.load_state_dict(d)
+
+def test_pi_seed_literals_match_nondim():
+    """PI_SEED hardcodes the groups so weighting.py imports in a bare test
+    env. E_ref and dtheta_ref are both open items; if either moves, the seed
+    silently stops matching the scaling it was derived from."""
+    from src.nondim import SCALES
+    from src.weighting import _PI_M_BODY, _PI_R_GRAV
+    assert _PI_M_BODY == pytest.approx(SCALES.Pi_M_body, rel=1e-4)
+    assert _PI_R_GRAV == pytest.approx(SCALES.Pi_R_grav, rel=1e-4)

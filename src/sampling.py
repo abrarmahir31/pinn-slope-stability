@@ -438,3 +438,22 @@ if __name__ == "__main__":
           f"t* range {c.t.min():.2f}..{c.t.max():.2f}")
     b = sample_boundary(600)
     print("boundary segments:", {k: len(v) for k, v in b.items()})
+
+    
+def to_device(coll, device):
+    """Move a Collocation, preserving leaf status on x/z/t.
+
+    .to() on a leaf with requires_grad returns a NON-leaf, and
+    torch.autograd.grad(psi, x) then resolves to the wrong node -- silently,
+    with no exception. Rebuild the leaves instead. `tag` stays numpy.
+    """
+    import dataclasses
+    def leaf(v):
+        return None if v is None else \
+            v.detach().to(device).requires_grad_(v.requires_grad)
+    def plain(v):
+        return None if v is None else v.detach().to(device)
+    return dataclasses.replace(
+        coll, x=leaf(coll.x), z=leaf(coll.z), t=leaf(coll.t),
+        w=plain(coll.w), nx=plain(coll.nx), nz=plain(coll.nz),
+        sigma0=plain(coll.sigma0), rho0=plain(coll.rho0))    
