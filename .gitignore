@@ -28,3 +28,4 @@ __pycache__/
 *.pyc
 scratch_pde.py
 src/step21_geometry/sigma0_cache.npz
+ckpt_toy.pt
