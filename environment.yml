@@ -1,19 +1,20 @@
-# NOTE: torch is intentionally NOT pinned here - install the CPU build on
-# the laptop and the matching CUDA build on the lab PC. See README.
+# torch is intentionally NOT listed here.
+#   Laptop:  pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   Lab PC:  pip install torch --index-url https://download.pytorch.org/whl/cu130
+# See tools/gpu_check.py. Do not add torch to this file - the two machines
+# need different builds and conda would drag in its own cudatoolkit.
 name: pinn
 channels:
   - conda-forge
 dependencies:
-  - pip
   - python=3.10
   - numpy
-  - matplotlib
   - scipy
+  - matplotlib
   - pandas
   - pymupdf
   - pillow
-  - gh
+  - pytest
   - pip
   - pip:
     - rosetta-soil==0.1.2
-    - pytest
