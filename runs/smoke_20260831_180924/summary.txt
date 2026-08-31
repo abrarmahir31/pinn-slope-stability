@@ -1,0 +1,10 @@
+GPU        : NVIDIA GeForce RTX 4060 Ti  (16.0 GB, cc 8.9)
+torch      : 2.13.0+cu130  CUDA 13.0   TF32 off
+config     : 8x64 float64 on cuda
+
+VRAM ladder (1 step each)
+  N_PDE=10,000  reserved 4.24 GB   544.2 ms/epoch
+  N_PDE=20,000  reserved 7.74 GB   860.9 ms/epoch
+  N_PDE=50,000  reserved 19.41 GB   4917.5 ms/epoch
+
+  headroom at N_PDE=10,000: 11.76 GB (73% of card)

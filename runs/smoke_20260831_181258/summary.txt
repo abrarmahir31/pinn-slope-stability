@@ -1,0 +1,43 @@
+GPU        : NVIDIA GeForce RTX 4060 Ti  (16.0 GB, cc 8.9)
+torch      : 2.13.0+cu130  CUDA 13.0   TF32 off
+config     : 8x64 float64 on cuda
+
+VRAM ladder (1 step each)
+  N_PDE=10,000  reserved 4.24 GB   558.3 ms/epoch
+  N_PDE=20,000  reserved 7.74 GB   863.7 ms/epoch
+  N_PDE=50,000  reserved 19.41 GB   4931.8 ms/epoch
+
+  headroom at N_PDE=10,000: 11.76 GB (73% of card)
+
+Running 2,000 epochs at N_PDE=10,000 (first 50 excluded from timing)
+  PINN 8x64 tanh | 29,571 params | float64 on cuda
+  ep     0  total 8.131e+06  pde 1.300e+01  mech 8.131e+06  bc 6.017e-01  ic 3.579e+00
+  ep   100  total 5.748e+03  pde 2.721e-02  mech 5.743e+03  bc 4.934e-01  ic 2.010e+00
+  ep   200  total 2.566e+03  pde 1.379e-02  mech 2.562e+03  bc 4.753e-01  ic 1.940e+00
+  ep   300  total 1.490e+03  pde 2.050e-02  mech 1.487e+03  bc 4.274e-01  ic 1.647e+00
+  ep   400  total 9.944e+02  pde 1.780e-02  mech 9.909e+02  bc 3.855e-01  ic 1.386e+00
+  ep   500  total 7.219e+02  pde 1.083e-02  mech 7.189e+02  bc 3.379e-01  ic 1.108e+00
+  ep   600  total 5.528e+02  pde 1.650e-02  mech 5.501e+02  bc 3.157e-01  ic 9.570e-01
+  ep   700  total 4.386e+02  pde 1.349e-02  mech 4.363e+02  bc 2.811e-01  ic 7.714e-01
+  ep   800  total 3.569e+02  pde 1.302e-02  mech 3.549e+02  bc 2.494e-01  ic 6.140e-01
+  ep   900  total 2.958e+02  pde 1.406e-02  mech 2.941e+02  bc 2.225e-01  ic 4.898e-01
+  ep  1000  total 2.489e+02  pde 8.399e-03  mech 2.474e+02  bc 2.018e-01  ic 3.956e-01
+  ep  1100  total 2.118e+02  pde 9.148e-03  mech 2.106e+02  bc 1.785e-01  ic 3.005e-01
+  ep  1200  total 1.822e+02  pde 1.087e-02  mech 1.811e+02  bc 1.590e-01  ic 2.292e-01
+  ep  1300  total 1.581e+02  pde 8.375e-03  mech 1.571e+02  bc 1.413e-01  ic 1.737e-01
+  ep  1400  total 1.385e+02  pde 1.129e-02  mech 1.376e+02  bc 1.383e-01  ic 1.587e-01
+  ep  1500  total 1.223e+02  pde 8.292e-03  mech 1.215e+02  bc 1.331e-01  ic 1.403e-01
+  ep  1600  total 1.088e+02  pde 7.165e-03  mech 1.080e+02  bc 1.324e-01  ic 1.336e-01
+  ep  1700  total 9.730e+01  pde 1.040e-02  mech 9.651e+01  bc 1.294e-01  ic 1.237e-01
+  ep  1800  total 8.736e+01  pde 1.319e-02  mech 8.667e+01  bc 1.166e-01  ic 9.901e-02
+  ep  1900  total 7.888e+01  pde 1.128e-02  mech 7.824e+01  bc 1.100e-01  ic 8.879e-02
+
+==============================================================
+seconds/epoch      median 545.9 ms   p95 558.7 ms
+peak VRAM          4.24 / 16.0 GB reserved
+projected Adam     100,000 ep  ->  15.16 h
+projected L-BFGS   20,000 it  ->  6.07 h  (at 2.0 closures/iter)
+FULL RUN           ~21.2 h
+  x3 cycles (Phase 4 realistic)  ~63.7 h
+  x27 SSR sweep (Phase 5, warm-started at ~1/3 cost)  ~191.1 h
+==============================================================

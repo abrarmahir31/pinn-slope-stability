@@ -68,7 +68,10 @@ from src.sampling import (sample_boundary, sample_interfaces, sample_interior,
                           to_device)
 from src.sigma0 import attach_sigma0
 from src.weighting import (PI_SEED_8X64, BalancerConfig, LossBalancer, TERMS)
-
+def _atomic_save(payload, path):
+    tmp = f"{path}.tmp"
+    torch.save(payload, tmp)
+    os.replace(tmp, path)
 
 # ---------------------------------------------------------------------------
 def setup(a):
@@ -223,11 +226,11 @@ def main(argv=None) -> int:
                 + f"   {sec:.3f}s/ep")
 
         if a.ckpt_every and step and step % a.ckpt_every == 0:
-            torch.save({"net": net.state_dict(), "opt": opt.state_dict(),
+            _atomic_save({"net": net.state_dict(), "opt": opt.state_dict(),
                         "bal": bal.state_dict(), "step": step, "L0": L0,
                         "cfg": vars(a)}, f"{a.out}/ckpt_{step:06d}.pt")
 
-    torch.save({"net": net.state_dict(), "opt": opt.state_dict(),
+    _atomic_save({"net": net.state_dict(), "opt": opt.state_dict(),
                 "bal": bal.state_dict(), "step": a.epochs, "L0": L0,
                 "cfg": vars(a)}, f"{a.out}/ckpt_final.pt")
     log.close()
