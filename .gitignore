@@ -27,3 +27,4 @@ src/step21_geometry/figures/
 output/
 scratch_*.py
 *_cache.npz
+"runs/" 
