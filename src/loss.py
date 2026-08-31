@@ -31,7 +31,7 @@ def uv_of(out: torch.Tensor) -> torch.Tensor:
     return out[:, 1:3]
 
 
-def ic_targets(path: str | None = None, s: Scales = SCALES):
+def ic_targets(path: str | None = None, s: Scales = SCALES, device: str = "cpu"):
     """(Collocation at t*=0, psi0_star) with psi0 non-dimensionalised.
 
     load_initial returns `targets` as a raw passthrough of the cache --
@@ -40,7 +40,7 @@ def ic_targets(path: str | None = None, s: Scales = SCALES):
     comparable with the network's psi* output. Omitting this is a
     factor-30 error.
     """
-    coll, targets = load_initial() if path is None else load_initial(path)
+    coll, targets = load_initial(device=device) if path is None else load_initial(path, device=device)
 
     psi0 = torch.as_tensor(
         targets["psi0"], dtype=coll.x.dtype, device=coll.x.device

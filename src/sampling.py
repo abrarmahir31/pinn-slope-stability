@@ -150,7 +150,8 @@ def _rejection_sample(n_target: int, bbox, rng, max_rounds: int = 40):
 
 def sample_interior(n: int = 20000, seed: int = 20260808,
                     stratify: bool = True, t_max: float = T_MAX_DAYS,
-                    s: Scales = SCALES) -> Collocation:
+                    s: Scales = SCALES,
+                    device: str = "cpu", dtype=torch.float64) -> Collocation:
     """Interior collocation points for L_PDE, dimensionless, weighted.
 
     Returns points whose material composition follows SAMPLE_SHARES, with
@@ -198,8 +199,8 @@ def sample_interior(n: int = 20000, seed: int = 20260808,
     t = rng.uniform(0.0, t_max, size=len(x))  # t is ALREADY dimensionless (days)
     w = w / w.mean()                          # mean 1, so loss magnitudes stay readable
 
-    xt, zt, tt = as_inputs(x / s.L_ref, z / s.L_ref, t)
-    wt = torch.as_tensor(w, dtype=xt.dtype).reshape(-1, 1)
+    xt, zt, tt = as_inputs(x / s.L_ref, z / s.L_ref, t, device=device)
+    wt = torch.as_tensor(w, dtype=xt.dtype, device=xt.device).reshape(-1, 1) 
     return Collocation(x=xt, z=zt, t=tt, w=wt, tag=tag)
 
 def _segment_normal(seg: str, pts: np.ndarray) -> np.ndarray:
@@ -253,7 +254,7 @@ def sample_boundary(n: int = 2000, seed: int = 0, t_max: float = T_MAX_DAYS,
 
 
 def load_initial(path: str = "src/step21_geometry/ic_cache.npz",
-                 s: Scales = SCALES):
+                 s: Scales = SCALES, device: str = "cpu"):
     """The stored t = 0 state for L_IC. Regenerate with 14_ic_checks.py.
 
     The cache is gitignored, so a fresh clone will not have it. It is
@@ -275,8 +276,8 @@ def load_initial(path: str = "src/step21_geometry/ic_cache.npz",
     tag = np.asarray(d["tag"]).astype(str) if "tag" in d else \
         np.asarray(g.material_tag(x, z)).astype(str)
 
-    xt, zt, tt = as_inputs(x / s.L_ref, z / s.L_ref, np.zeros(len(x)))
-    wt = torch.as_tensor(w / w.mean(), dtype=xt.dtype).reshape(-1, 1)
+    xt, zt, tt = as_inputs(x / s.L_ref, z / s.L_ref, np.zeros(len(x)), device=device)
+    wt = torch.as_tensor(w / w.mean(), dtype=xt.dtype, device=xt.device).reshape(-1, 1)
     targets = {k: np.asarray(d[k]) for k in d.files
                if k not in ("x", "z", "w", "tag", "meta")}
     return Collocation(x=xt, z=zt, t=tt, w=wt, tag=tag), targets

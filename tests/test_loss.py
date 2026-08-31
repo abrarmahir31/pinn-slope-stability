@@ -7,7 +7,8 @@ creeping into a path whose verification depends on float64.
 
 import torch
 
-from src.config import BOUNDS, full
+from src.config import BOUNDS, full, resolve_device
+DEV = resolve_device(full().device)
 from src.loss import L_IC, L_PDE, ic_targets, psi_of, uv_of
 from src.model import PINN
 from src.nondim import SCALES
@@ -77,7 +78,7 @@ class _ExactNet:
 
 def test_L_IC_vanishes_for_exact_solution():
     """A net reproducing psi0* with u = v = 0 gives L_IC = 0."""
-    coll, psi0 = ic_targets()
+    coll, psi0 = ic_targets(device=DEV)
     L, parts = L_IC(_ExactNet(psi0), coll, psi0)
     assert float(L) < 1e-28
     assert float(parts["ic_head"]) < 1e-28
@@ -94,7 +95,7 @@ def test_L_IC_detects_offset():
 
 def test_L_IC_runs_on_real_network():
     """End-to-end: finite, positive, float64, both components present."""
-    coll, psi0 = ic_targets()
+    coll, psi0 = ic_targets(device=DEV)
     net = PINN(full(), BOUNDS)
     L, parts = L_IC(net, coll, psi0)
     assert torch.isfinite(L)
@@ -104,7 +105,7 @@ def test_L_IC_runs_on_real_network():
 
 def test_L_PDE_gradients_reach_every_parameter():
     """Guards create_graph and the .detach() placement in L_PDE."""
-    coll = sample_interior(200)
+    coll = sample_interior(200, device=DEV)
     net = PINN(full(), BOUNDS)
     L, _ = L_PDE(net, coll, load_materials())
     L.backward()
@@ -113,7 +114,7 @@ def test_L_PDE_gradients_reach_every_parameter():
     
 def test_L_PDE_runs_on_real_network():
     """End-to-end: finite, positive, float64, per-tag components present."""
-    coll = sample_interior(200)
+    coll = sample_interior(200, device=DEV)
     net = PINN(full(), BOUNDS)
     L, parts = L_PDE(net, coll, load_materials(), per_tag=True)
     assert torch.isfinite(L)

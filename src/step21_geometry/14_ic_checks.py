@@ -1,3 +1,6 @@
+# Windows: torch must load before numpy/MKL or shm.dll fails to resolve.
+import torch as _torch  # noqa: F401
+
 """Step 2.3 acceptance checks. Every check guards against passing on an empty array."""
 import hashlib, json, pathlib
 import numpy as np

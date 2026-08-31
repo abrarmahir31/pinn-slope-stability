@@ -7,6 +7,8 @@ fails.
 Output: sigma0_cache.npz next to ic_cache.npz. Gitignored and deterministic,
 so regenerating is the intended path rather than shipping the binary.
 """
+# Windows: torch must load before numpy/MKL or shm.dll fails to resolve.
+import torch as _torch  # noqa: F401
 import hashlib
 import pathlib
 import sys

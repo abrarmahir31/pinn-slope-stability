@@ -1,3 +1,5 @@
+# Windows: torch must load before numpy/MKL or shm.dll fails to resolve.
+import torch as _torch  # noqa: F401
 """Mechanical BC verification. Gate before Step 2.3."""
 import numpy as np
 import geometry as g
