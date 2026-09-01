@@ -228,6 +228,7 @@ def main(argv=None) -> int:
                    "grad_norms": dict(g),
                    "spread": (max(live) / min(live)) if len(live) > 1 else None,
                    "clipped": sorted(bal._clipped),
+                   "log_c_raw": dict(bal._log_c_raw),
                    "frozen": sorted(bal._frozen),
                    "lr": lr_now,
                    "sec_per_epoch": sec}

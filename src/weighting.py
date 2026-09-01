@@ -435,6 +435,7 @@ class LossBalancer:
         self.snapshots: list = []      # (losses, norms) pairs for D-W.0b
         self._frozen: set = set()
         self._clipped: set = set()
+        self._log_c_raw: Dict[str, float] = {}
         self._last_norms: Dict[str, float] = {}
         self._n_updates = 0
 
@@ -492,7 +493,8 @@ class LossBalancer:
 
         tgt = self._target(active)
         lo, hi = self.cfg.log_clip
-        self._clipped = set()
+        self._clipped: set = set()
+        self._log_c_raw: Dict[str, float] = {}
 
         for k, g in active.items():
             if k == self.cfg.anchor:
@@ -505,6 +507,7 @@ class LossBalancer:
                      + self.cfg.lam * math.log10(max(c_hat, 1e-300)))
             if log_c <= lo or log_c >= hi:
                 self._clipped.add(k)
+            self._log_c_raw[k] = log_c        # pre-clamp demand, D-W.3
             self.c[k] = 10.0 ** min(max(log_c, lo), hi)
 
         self.c[self.cfg.anchor] = 1.0
