@@ -155,3 +155,32 @@ BCs, which are a condition on TOTAL stress.
       ends 3.66x worse. Not coupling -- include_feedback=False gives
       4.19x. geomean is worse on every term. Try argmax-g anchor
       re-selected at each update, or SA-PINN pointwise weights.
+
+      ## Day 24 findings
+
+**L-BFGS absent from Step 3.4.** No `LBFGS`/`lbfgs`/`closure` anywhere in
+the repo. The roadmap's two-stage Adam -> L-BFGS protocol is half-built:
+Adam works, the second stage was never written. Days 25-27 assume both.
+Decide before launch whether to write it first or run Adam while writing.
+Open sub-question: does the checkpoint carry balancer state, so L-BFGS can
+resume from an Adam run? Check `_atomic_save`'s payload.
+
+**float32 ruled out (closed).** `derivatives.py:56`: float32 bottoms the
+hydrostatic Richards test at ~1e-7 vs 1e-14, too coarse to separate
+"exactly zero" from "nearly cancelled" -- which would destroy the
+interface finding (~1e-26) and the Day 22 diffusion-length argument.
+Production stays float64. `check_float32.py` corroborates.
+
+**`KCConfig.is_on` fails open.** An unrecognised material tag returns the
+global `enabled` rather than raising (`check_kc_range.py`, tag "XX" ->
+1.1104 at eps_v=1e-2). A misspelled stratum name in `L_PDE` would silently
+receive KC feedback. Consider validating against `load_materials()` keys.
+
+**`L_IC` edit pending.** `grad_norm_table.py:102` carries
+`# needs the L_IC edit`. Resolve or confirm already done.
+
+**Tm exclusion for Methodology §3.** KC_DEFAULT has `per_unit={"Tm": False}`.
+Rationale is D-3.3.2 (`test_coupling.py:363`): Kozeny-Carman is a
+matrix-porosity law, Tm is fracture-dominated (n0=0.0221, K_s=3.13e-06,
+three orders above Mk). Quantitative backing in `check_kc_range.py`.
+Also record `kozeny_carman_factor`'s keyword defaults there.
