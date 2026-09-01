@@ -110,6 +110,7 @@ def setup(a):
 def parse(argv=None):
     ap = argparse.ArgumentParser(
         description=__doc__,
+        fromfile_prefix_chars="@",
         formatter_class=argparse.RawDescriptionHelpFormatter)
     g = ap.add_argument_group("network")
     g.add_argument("--layers", type=int, default=2,
