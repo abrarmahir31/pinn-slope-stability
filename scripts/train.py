@@ -142,15 +142,16 @@ def parse(argv=None):
                    help="unit weights. The control arm: under unit weights "
                         "the objective is ~99.9%% bc_mech and everything else "
                         "degrades. Not a training mode.")
-
     g = ap.add_argument_group("io")
     g.add_argument("--log-every", type=int, default=25)
     g.add_argument("--ckpt-every", type=int, default=500)
     g.add_argument("--out", default="runs/dev")
     g.add_argument("--resume", metavar="CKPT")
+    g.add_argument("--no-feedback", action="store_true",
+                   help="Kozeny-Carman porosity-strain feedback OFF. The "
+                        "one-way arm of the Step 6.2 ablation (Day 51).")
     return ap.parse_args(argv)
-
-
+   
 # ---------------------------------------------------------------------------
 def main(argv=None) -> int:
     a = parse(argv)
@@ -201,7 +202,7 @@ def main(argv=None) -> int:
                          if a.lr_schedule == "cosine" else 1.0)
         for pg in opt.param_groups:
             pg["lr"] = lr_now
-        L = losses_at(net, loss_fn, coll)
+        L = losses_at(net, loss_fn, coll, feedback=not a.no_feedback)
         if L0 is None:
             L0 = {k: float(v.detach()) for k, v in L.items()}
 
