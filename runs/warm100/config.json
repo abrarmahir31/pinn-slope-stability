@@ -1,0 +1,21 @@
+{
+  "layers": 8,
+  "width": 64,
+  "seed": 20250812,
+  "device": "cuda",
+  "n_pde": 10000,
+  "n_bc": 3000,
+  "n_iface": 500,
+  "t_max": 30.0,
+  "epochs": 500,
+  "lr": 0.001,
+  "lr_schedule": "cosine",
+  "every": 25,
+  "lam": 0.3,
+  "warmup": 100,
+  "no_balance": false,
+  "log_every": 25,
+  "ckpt_every": 0,
+  "out": "runs/warm100",
+  "resume": null
+}

@@ -51,6 +51,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import math
 import os
 import sys
 import time
@@ -126,6 +127,9 @@ def parse(argv=None):
     g = ap.add_argument_group("optimisation")
     g.add_argument("--epochs", type=int, default=1000)
     g.add_argument("--lr", type=float, default=1e-3)
+    g.add_argument("--lr-schedule", choices=("cosine", "flat"), default="cosine",
+                   help="cosine = roadmap three-phase. flat pins lr for "
+                   "control runs that must stay comparable.")
 
     g = ap.add_argument_group("balancer (Step 3.4)")
     g.add_argument("--every", type=int, default=25,
@@ -178,6 +182,12 @@ def main(argv=None) -> int:
         net.load_state_dict(d["net"])
         opt.load_state_dict(d["opt"])
         bal.load_state_dict(d["bal"])       # raises if PI_SEED has changed
+        prev_ep = d.get("cfg", {}).get("epochs")
+        if prev_ep is not None and prev_ep != a.epochs:
+            print(f"WARNING: resuming with --epochs {a.epochs} but the "
+                  f"checkpoint was written under --epochs {prev_ep}. The lr "
+                  f"schedule is a fraction of run length, so it will reshape "
+                  f"mid-run.", file=sys.stderr)
         start, L0 = d["step"] + 1, d.get("L0")
         print(f"resumed {a.resume} at step {start}; "
               f"c = { {k: round(v, 3) for k, v in bal.c.items()} }")
@@ -187,6 +197,10 @@ def main(argv=None) -> int:
     t0, n_done = time.time(), 0
 
     for step in range(start, a.epochs + 1):
+        lr_now = a.lr * (lr_factor(step, a.epochs)
+                         if a.lr_schedule == "cosine" else 1.0)
+        for pg in opt.param_groups:
+            pg["lr"] = lr_now
         L = losses_at(net, loss_fn, coll)
         if L0 is None:
             L0 = {k: float(v.detach()) for k, v in L.items()}
@@ -201,7 +215,7 @@ def main(argv=None) -> int:
         total.backward()
         opt.step()
         n_done += 1
-
+                  
         if step % a.log_every == 0:
             raw = {k: float(v.detach()) for k, v in L.items()}
             g = bal._last_norms
@@ -214,7 +228,9 @@ def main(argv=None) -> int:
                    "spread": (max(live) / min(live)) if len(live) > 1 else None,
                    "clipped": sorted(bal._clipped),
                    "frozen": sorted(bal._frozen),
+                   "lr": lr_now,
                    "sec_per_epoch": sec}
+                
             log.write(json.dumps(rec) + "\n")
             log.flush()
             sp = rec["spread"]
@@ -248,6 +264,17 @@ def main(argv=None) -> int:
               "retain_graph=True. Raise --every before cutting --n-pde.")
     return 0
 
+def lr_factor(step, total, warm=0.10, decay_end=0.50, floor=0.10):
+    """Multiplier on base lr. Roadmap Step 4.1 schedule as fractions of run
+    length: flat warm-up, cosine decay, flat refinement. Pure function of step,
+    so resume needs no scheduler state."""
+    w, d = warm * total, decay_end * total
+    if step < w:
+        return 1.0
+    if step < d:
+        p = (step - w) / (d - w)
+        return floor + (1.0 - floor) * 0.5 * (1.0 + math.cos(math.pi * p))
+    return floor    
 
 if __name__ == "__main__":
     sys.exit(main())

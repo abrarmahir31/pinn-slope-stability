@@ -1,0 +1,26 @@
+{
+  "_comment": "Day 23 production config, RTX 4060 Ti 16 GB. Rationale in docs/day23_config.md. Pass with: python scripts/train.py @configs/production_labpc.args  (or copy the flags by hand).",
+
+  "layers": 8,
+  "width": 64,
+  "seed": 20250812,
+  "device": "cuda",
+
+  "n_pde": 10000,
+  "n_bc": 3000,
+  "n_iface": 500,
+  "t_max": 30.0,
+
+  "epochs": 100000,
+  "lr": 1e-3,
+  "lr_schedule": "cosine",
+
+  "every": 25,
+  "lam": 0.3,
+  "warmup": 0,
+  "no_balance": false,
+
+  "log_every": 100,
+  "ckpt_every": 500,
+  "out": "runs/prod01"
+}
