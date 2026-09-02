@@ -96,7 +96,7 @@ class NearPhysical(nn.Module):
     """
     Z_WT = 197.0
 
-    def __init__(self, pinn, s=None, eps_psi=3e-3, eps_uv=1e-3):
+    def __init__(self, pinn, s=None, eps_psi=0.3, eps_uv=1e-3):
         super().__init__()
         from src.nondim import SCALES
         self.pinn = pinn

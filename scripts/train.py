@@ -85,7 +85,7 @@ def setup(a):
     """
     cfg = dataclasses.replace(tiny(), n_layers=a.layers, n_neurons=a.width,
                               seed=a.seed, device=a.device)
-    net = NearPhysical(PINN(cfg, BOUNDS))
+    net = NearPhysical(PINN(cfg, BOUNDS), eps_psi=a.eps_psi)
     dev = net.device
 
     coll = sample_interior(a.n_pde, a.seed)
@@ -151,6 +151,11 @@ def parse(argv=None):
     g.add_argument("--no-feedback", action="store_true",
                    help="Kozeny-Carman porosity-strain feedback OFF. The "
                         "one-way arm of the Step 6.2 ablation (Day 51).")
+    g = ap.add_argument_group("ansatz (NearPhysical)")
+    g.add_argument("--eps-psi", type=float, default=0.3,
+                   help="NearPhysical psi perturbation scale. 3e-3 (the "
+                        "pre-Day-25 value) caps psi excursion at 0.5 m of "
+                        "head, which contradicts the Tm rain flux BC.")
     return ap.parse_args(argv)
    
 # ---------------------------------------------------------------------------

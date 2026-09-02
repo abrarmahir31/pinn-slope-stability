@@ -24,6 +24,7 @@ Two separate causes, so two separate groups of tests below.
 
 from __future__ import annotations
 
+import inspect
 import pytest
 import torch
 
@@ -182,3 +183,44 @@ def test_a_detached_psi0_would_not_fix_it(coll):
     assert not dead.requires_grad
     (g,) = torch.autograd.grad(live.sum(), z, create_graph=True)
     assert g.abs().min().item() != pytest.approx(0.0, abs=1e-40)
+
+
+def cfg_eps_psi():
+    """The production eps_psi, read off NearPhysical's signature so this test
+    tracks model.py rather than duplicating the constant."""
+    from src.model import NearPhysical
+    return inspect.signature(NearPhysical.__init__).parameters["eps_psi"].default
+
+
+def test_nearphysical_preserves_interface_continuity_at_t0():
+    """The wrapper, not psi0_star. eps_psi scales the network's contribution,
+    so raising it perturbs the init away from exact flux continuity. This is
+    the test that would have caught the 3e-3 suppression, and the one that
+    bounds how far eps_psi can go."""
+    from src.config import bounds_from_geometry, full
+    from src.loss import L_interface
+    from src.model import PINN, NearPhysical
+    from src.sampling import sample_interfaces
+
+    ifaces = sample_interfaces(400, SEED)
+
+    cfg = full()
+    cfg.device, cfg.dtype = "cpu", "float64"
+    bounds = bounds_from_geometry(t_max=30.0, s=SCALES)
+
+    # The analytic limit: eps_psi = 0 leaves psi = psi0_star exactly, which
+    # has uniform total head and therefore zero Darcy flux on both sides of
+    # every contact. test_loss_interface.py pins that this vanishes.
+    exact = NearPhysical(PINN(cfg, bounds), eps_psi=0.0)
+    assert float(L_interface(exact, ifaces, MATS)[0].detach()) == pytest.approx(0.0, abs=1e-20)
+
+    # At the production value the network's contribution is live, so the jump
+    # is no longer identically zero. TOLERANCE IS A MODELLING CHOICE: measured
+    # 5.85e-06 at eps_psi = 0.3 (2 Sep, seed 7, N=400), against Pi_M_body =
+    # 3.0019, i.e. ~2e-6 of the scale the mechanical residual is normalised to.
+    # The 1e-4 bound leaves ~17x headroom for seed variation. Raising eps_psi
+    # past the point where this fails means the ansatz no longer starts from a
+    # flux-continuous state, and D-W.4's "interface is inactive at t = 0"
+    # premise no longer holds.
+    prod = NearPhysical(PINN(cfg, bounds), eps_psi=cfg_eps_psi())
+    assert float(L_interface(prod, ifaces, MATS)[0].detach()) < 1e-4

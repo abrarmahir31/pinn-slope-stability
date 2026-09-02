@@ -58,7 +58,8 @@ from src.weighting import (PI_SEED, TERMS, BalancerConfig, format_table,
 # ===========================================================================
 
 def build(seed: int = 20250812, N: int = 300,
-          n_layers: int = 2, n_neurons: int = 64):
+          n_layers: int = 2, n_neurons: int = 64,
+          eps_psi: float = 0.3):
     import dataclasses
     from src.config import BOUNDS, tiny
     from src.loss import ic_targets
@@ -73,7 +74,7 @@ def build(seed: int = 20250812, N: int = 300,
     # reproduces the Step 3.3 diagnostic network.
     cfg = dataclasses.replace(tiny(), n_layers=n_layers,
                               n_neurons=n_neurons, seed=seed)
-    net = NearPhysical(PINN(cfg, BOUNDS))
+    net = NearPhysical(PINN(cfg, BOUNDS), eps_psi=eps_psi)
 
     coll = sample_interior(N, seed)
     attach_sigma0(coll)
@@ -188,17 +189,22 @@ def main(argv=None) -> int:
     ap.add_argument("--n", type=int, default=300,
                     help="collocation points per set. 300 matches the "
                          "baseline note; 3000 for a stable measurement.")
+    ap.add_argument("--eps-psi", type=float, default=0.3,
+                    help="NearPhysical psi perturbation scale. 3e-3 was the "
+                         "hardcoded pre-Day-25 value; it caps psi excursion "
+                         "at 0.5 m of head.")
     ap.add_argument("--json", metavar="PATH",
                     help="write the raw numbers, for the methods section")
     a = ap.parse_args(argv)
 
     global build, losses_at
     if a.selftest:
-        build = lambda s, n=None, *a_, **k_: _selftest_build(s)   # noqa: E731
-        losses_at = lambda n, f, c, feedback=True: f(n, c)    # noqa: E731
+        build = lambda s, n=None, *a_, **k_: _selftest_build(s)      # noqa: E731
+        losses_at = lambda n, f, c, feedback=True: f(n, c)           # noqa: E731
         print("*** --selftest: synthetic loss, NOT the Isikdere physics ***\n")
 
-    net, loss_fn, colloc = build(a.seed, a.n, a.n_layers, a.n_neurons)
+    net, loss_fn, colloc = build(a.seed, a.n, a.n_layers, a.n_neurons,
+                                 a.eps_psi)
     L0, g0 = snapshot(net, loss_fn, colloc)
 
     missing = [k for k in TERMS if k not in L0]

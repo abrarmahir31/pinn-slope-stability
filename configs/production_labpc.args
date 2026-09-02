@@ -32,3 +32,5 @@ cosine
 500
 --out
 runs/prod01
+--eps-psi
+0.3
