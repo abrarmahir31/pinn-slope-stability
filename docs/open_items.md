@@ -184,3 +184,171 @@ Rationale is D-3.3.2 (`test_coupling.py:363`): Kozeny-Carman is a
 matrix-porosity law, Tm is fracture-dominated (n0=0.0221, K_s=3.13e-06,
 three orders above Mk). Quantitative backing in `check_kc_range.py`.
 Also record `kozeny_carman_factor`'s keyword defaults there.
+## Day 26 findings
+
+**Fresh clone does not pass `pytest -q`.** `src/step21_geometry/ic_cache.npz`
+and `sigma0_cache.npz` are gitignored, and 11 tests fail / 42 error without
+them. Regenerate with `cd src/step21_geometry && python 14_ic_checks.py` and
+`python 17_sigma0_solve.py` (both self-check and print ALL CHECKS PASSED).
+Belongs in README.md, not here.
+
+**`pi_seed` was missing the ansatz prefactors (fixed).** The seed is
+`((Pi_M*eps_uv)/(Pi_R*eps_psi))^2 = 4.221e+01`, not `(Pi_M/Pi_R)^2 =
+3.799e+06`. What multiplies the network inside a residual is the Pi group AND
+the eps that `NearPhysical` puts in front of the raw net, and `grad L =
+(2/N) sum r grad r` carries it twice. Measured check: the cross-equation
+requirement is w^ = 6.93e+02 against pde_mech, 3.47 against bc_mech; the new
+seed leaves c = 16.4 and 0.082, the old one 1.8e-04 and 9.1e-07. The residual
+16x is van Genuchten K_r nonlinearity, which is not a prefactor and is the
+part the balancer is supposed to measure.
+
+Why it survived eleven days: at `eps_psi = 3e-3` the omitted ratio
+`eps_uv/eps_psi` was 1/3, so the seed was wrong by 9x and the correction
+absorbed it silently. At 0.3 the same omission is 9e4.
+
+**CORRECTIONS to the Day 25 note.**
+- `pde_mech`'s grad-norm ratio between the two ansaetze is 0.98634, not
+  exactly 1.0. It moves because `total_stress_star` carries the Bishop
+  increment `chi*psi - chi_0*psi_0`. Small, but it is the two-way coupling
+  being live; do not write "exactly 1.0" into Methodology.
+- The note does not mention that `bc_mech` -- the anchor -- moved 1153.6x.
+- `grad_norm_table.py:63`'s "stale BOUNDS" item is CLOSED. `src.config.BOUNDS`
+  agrees with `bounds_from_geometry` to 6.4 cm on every component and is
+  pinned by `tests/test_bounds.py::test_bounds_literal_matches_geometry`. The
+  x_max 4.41 / z_max 1.18 figures in the note match nothing in the tree.
+- The per-segment `parts` dicts in `loss.py` are detached BY DESIGN (D-W.5,
+  reported not weighted). A zero gradient column off `per_segment=True` is
+  the measurement being taken wrong, not a bug. Measure one segment at a time
+  by passing a one-segment `bcs` dict.
+
+**THE ANCHOR IS MEASURING THE HYDRAULIC FIELD.** `L_BC_mech` split by segment
+at 8x64, N=300 (`||grad L||`):
+
+    segment          kind          eps_psi=3e-3   eps_psi=0.3     ratio
+    cut_face         traction        7.6392e-03    8.7573e+00    1146.4
+    natural_ground   traction        1.0026e-03    2.9407e+00    2933.0
+    bench            traction        2.4729e-03    1.3619e+00     550.7
+    pit_floor        constrained     1.6396e-04    1.6396e-04       1.0
+    base             constrained     1.0379e-04    1.0379e-04       1.0
+    far_field_f1     constrained     1.0291e-04    1.0291e-04       1.0
+    <total>          --              1.9462e-03    2.2451e+00    1153.6
+
+The three constrained segments are bit-identical -- they constrain u*, v*
+only. All movement is in the traction-free segments, which use
+`total_stress_star` and therefore carry the pore increment; with
+`eps_uv = 1e-3` the `D:eps` part of those tractions is negligible, so what is
+left is `sigma0.n` plus pore. Isolating it by rebuilding at `eps_psi = 0`
+(pore increment identically zero): `||grad L_bc_mech|| = 1.9038e-03` against
+2.2451e+00 at 0.3. **0.085% of the anchor's gradient is mechanical.**
+
+D-W.2 pinned `bc_mech` at 1.0 on the premise that it is a stable mechanical
+reference holding the largest gradient. Neither half holds at 8x64 under the
+new ansatz, and every w^ in `PI_SEED_8X64` is normalised against it. D-W.2 was
+settled at 2x64 and has still never been rerun at 8. THIS IS THE DECISION THAT
+GATES THE PRODUCTION RUN.
+
+Candidate targets, required w^ at eps_psi = 0.3 (spread g_max/g_min = 9.42e6,
+i.e. 6.97 orders -- wider than a +/-3 clip can span from a w0 = 1 seed, so
+only the SEED can carry it, whatever the target):
+
+    term            g_i        anchor=bc_mech  anchor=pde_mech   geomean
+    pde_mech        4.487e+02       5.004e-03        1.000e+00  6.671e-04
+    ic_head         4.410e+00       5.090e-01        1.017e+02  6.787e-02
+    bc_mech         2.245e+00       1.000e+00        1.999e+02  1.333e-01
+    bc              1.589e+00       1.413e+00        2.823e+02  1.883e-01
+    pde_richards    6.478e-01       3.466e+00        6.927e+02  4.621e-01
+    interface       9.882e-04       2.272e+03        4.541e+05  3.029e+02
+    ic_disp         4.762e-05       4.715e+04        9.423e+06  6.286e+03
+
+**`ic_disp` starts outside the clip and will stay there.** Its gradient norm
+is byte-identical under both ansaetze (4.7618e-05; it has no psi dependence),
+so w^ went 4.09e+01 -> 4.71e+04 purely because the ANCHOR grew 1154x. Held at
+w0 = 1 it needs 4.67 orders and the balancer pins it at c = 1e3 -- prod01's
+`bc` failure relocated to a new term. Confirmed in the smoke run:
+`clipped: ["ic_disp"]` from step 100 onward. Geomean improves it to 3.80
+orders, still outside. Seeding it at 4.71e+04 is the other option and is NOT
+obviously wrong -- `ic_disp` is a t=0 constraint, so enforcing it hard does
+not stop u,v evolving at t>0 -- but it means the optimiser spends as much
+effort on an already-satisfied IC as on `pde_mech`. Decide deliberately.
+
+**`activity_floor = 1e-12` cannot see this class of problem.** It catches
+terms that are numerically zero, not terms that are small because they are
+satisfied. At eps_psi = 0.3, `ic_disp` sits at 1.06e-07 of g_max and
+`interface` at 2.20e-06, both far above the floor and both being driven
+toward a parity they should not have. A floor of ~1e-5 would freeze exactly
+those two by measurement rather than by the hand-written `hold` list in
+`seed_from_gradnorms`. NOT done: `pde_richards` sits at 1.44e-03 of g_max, so
+a 1e-5 floor leaves it only 144x of headroom, and dropping out of the active
+set is precisely the Day 25 disaster. Needs a regime-aware rule (freeze on
+p ~ 0.5, not on magnitude), not a bigger constant.
+
+**`inspect_prod01.py` silently misread prod01 (fixed).** It rebuilds
+`NearPhysical` before `load_state_dict`, so it inherited the new default
+`eps_psi = 0.3` and would have reported prod01's psi* 100x too large -- the
+opposite of the collapse it exists to detect. Now takes a checkpoint path and
+`--eps-psi`; pass `3e-3` for anything trained before 2 Sep.
+
+### Day 26, later: the measured seed was never a measurement
+
+`scripts/seed_variance.py` (new) varies ONLY the collocation draw and
+recomputes the `w^` column. 8x64, eps_psi = 0.3, t = 0, three sampling seeds.
+Artifact: `docs/seed_variance_day26.json`, pinned by
+`test_the_measured_pde_seeds_are_not_reproducible_across_draws`.
+
+    term            spread across 3 draws        verdict
+                     N = 300     N = 1200
+    pde_richards        2.0x      1264.1x        unusable
+    pde_mech           45.0x        30.1x        unusable
+    interface           9.1x         1.4x        --
+    ic_disp             3.4x         3.1x        stable
+    bc                  2.5x         2.1x        stable
+    ic_head             2.4x         2.2x        stable
+    bc_mech             1.0x         1.0x        anchor by definition
+
+`w^[pde_richards]` moves 1264x between two draws of the same objective -- more
+than the +3 clip can correct. Which draw you happen to seed from therefore
+decides whether the run ends up clipped. And the spread GROWS with N, which is
+the opposite of Monte-Carlo convergence: it is the signature of an estimator
+whose variance is dominated by rare extreme samples. van Genuchten K_r spans
+nine orders across this domain (1.7e-04 in Tm near the surface to 2.5e-13 at
+the crest), so the squared Richards residual and its gradient are set by
+whichever few collocation points land in the extreme cells.
+
+This is the single explanation for three separate failures:
+  - the 16 Aug `pde_mech = 2.925e-06` seed going stale;
+  - `t0` (w0 = 3.47) driving pde_richards into the +3 clip by step 400;
+  - `geomean` (w0 = 115.8) driving it into the -3 clip by step 200.
+None of them was a wrong choice between two good numbers. All three were
+draws from a distribution with no useful centre.
+
+MATCHED THREE-ARM ABLATION, identical N/seed/trajectory, L/L0 at step 550
+(runs/seedablation_{t0,geomean,formula}):
+
+    term            t0        geomean      formula     best
+    bc_mech         8.427e-02  5.351e-02   1.550e-02   formula
+    pde_mech        2.744e+01  3.088e+01   6.291e+00   formula
+    pde_richards    1.614e-03  4.133e-04   1.727e-06   formula
+    bc              1.099e-01  3.863e-02   3.068e-02   formula
+    ic_head         5.243e-01  1.744e-01   2.943e-01   geomean
+    ic_disp         7.190e-07  2.582e-07   7.775e-07   geomean
+    interface       2.986e-20  4.375e-23   9.026e-24   formula
+    weighted spread     43.79      109.1        23.85  formula
+
+The analytic seed wins five of seven terms and the spread, and it is the only
+arm that was not tuned. `--seed-source` now defaults to `formula`; `t0` and
+`geomean` are kept as named arms so the ablation stays reproducible.
+
+CAVEAT before this goes in Methodology: one network seed, 550 epochs, N = 1200,
+CPU. Replicate at 2-3 network seeds and production N. The direction is strongly
+suggested, not established.
+
+WHAT THIS DOES NOT FIX. `ic_disp` is stable across draws (3.1x), so its
+4.71e+04 requirement is real and it stays clipped in all three arms. That is
+the anchor problem, not the seed problem, and it is still the item that gates
+the production run.
+
+Note also that `ic_head` ends ABOVE 1.0 relative to L0 in every arm at N=1200.
+Under eps_psi = 3e-3 the IC was satisfied by construction; it is now a real
+soft constraint and no seed choice is satisfying it. `inspect_prod01.py` on the
+N=2500 smoke checkpoint shows the t=0 field off the analytic IC by up to 84 m
+of head at step 500. Watch it in the production run.

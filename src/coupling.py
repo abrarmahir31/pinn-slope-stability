@@ -75,15 +75,40 @@ class KCConfig:
         87.3% of the domain by area, 2.2% porosity, and fracture-dominated
         (Finding 6) — applying a matrix-porosity law there is a decision, not
         a default. This is where you record it.
+
+    known_tags : the stratum names `is_on` will accept. Defaults to the three
+        Section 5 units. A tag outside this set raises rather than silently
+        returning `enabled` — see `is_on`.
     """
     enabled: bool = False
     ratio_min: float = 0.5
     ratio_max: float = 1.5
     n_max: float = 0.95
     per_unit: dict | None = None
+    known_tags: tuple = ("Mk", "Mk_d", "Tm")
 
     def is_on(self, tag: str | None = None) -> bool:
-        if self.per_unit is not None and tag is not None and tag in self.per_unit:
+        """Is Kozeny-Carman feedback active for this stratum?
+
+        UNKNOWN TAGS RAISE (Day 26). This used to fall through to `enabled`,
+        so `KC_DEFAULT.is_on("TM")` returned True and a misspelled stratum
+        name in `L_PDE` silently received the feedback that D-3.3.2 excluded
+        it from -- with no error, no warning, and a Step 6.2 ablation whose
+        two arms differ by a typo. `check_kc_range.py` found tag "XX" giving
+        1.1104 at eps_v = 1e-2. Failing open on an identifier is never right
+        when the identifier selects a physical law.
+
+        `tag=None` is still allowed and still means "the global setting":
+        that is the documented call for a domain-wide query.
+        """
+        if tag is None:
+            return self.enabled
+        if tag not in self.known_tags:
+            raise KeyError(
+                f"KCConfig.is_on: unknown stratum tag {tag!r}. Known: "
+                f"{sorted(self.known_tags)}. Pass tag=None for the global "
+                f"setting, or extend known_tags if the domain has grown.")
+        if self.per_unit is not None and tag in self.per_unit:
             return bool(self.per_unit[tag])
         return self.enabled
 

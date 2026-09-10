@@ -1,6 +1,18 @@
-"""What did prod01 actually learn? Loss values cannot distinguish a
+"""What did a run actually learn? Loss values cannot distinguish a
 converged field from a collapsed one -- pde_richards at 5e-08 is either
-excellent or a sign psi went trivial. This looks at the fields."""
+excellent or a sign psi went trivial. This looks at the fields.
+
+    python scripts/inspect_prod01.py                        # prod01, as before
+    python scripts/inspect_prod01.py runs/prod02_smoke/ckpt_002000.pt
+
+EPS_PSI IS NOT OPTIONAL (Day 26). `NearPhysical`'s default moved 3e-3 -> 0.3
+on Day 25, and this script rebuilds the wrapper before loading weights. Reading
+a prod01 checkpoint under the new default reports psi* a hundred times larger
+than the network was trained to emit, which is the opposite of the collapse
+this script exists to detect. Pass --eps-psi for anything trained before 2 Sep.
+"""
+import argparse
+
 import torch
 from src.model import PINN, NearPhysical
 from src.loss import psi_of, uv_of
@@ -10,14 +22,25 @@ from src.nondim import SCALES
 BOUNDS = bounds_from_geometry(t_max=30.0, s=SCALES)
 print("bounds_from_geometry:", BOUNDS)
 
-d = torch.load("runs/prod01/ckpt_014000.pt", map_location="cpu",
-               weights_only=False)
+ap = argparse.ArgumentParser(description=__doc__,
+                             formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument("ckpt", nargs="?", default="runs/prod01/ckpt_014000.pt")
+ap.add_argument("--eps-psi", type=float, default=None,
+                help="ansatz prefactor the checkpoint was TRAINED with. "
+                     "Default: NearPhysical's current default (0.3). "
+                     "prod01 and anything else before 2 Sep needs 3e-3.")
+a = ap.parse_args()
+
+d = torch.load(a.ckpt, map_location="cpu", weights_only=False)
+print("checkpoint:", a.ckpt, "  step:", d.get("step"))
 print("ckpt dtype:", next(iter(d["net"].values())).dtype)
 
 cfg = full()
 cfg.device = "cpu"
 cfg.dtype  = "float64"
-net = NearPhysical(PINN(cfg, BOUNDS))
+kw = {} if a.eps_psi is None else {"eps_psi": a.eps_psi}
+net = NearPhysical(PINN(cfg, BOUNDS), **kw)
+print("ansatz:", net.summary())
 net.load_state_dict(d["net"])
 net.eval()
 
@@ -83,7 +106,7 @@ print(f"IC residual at t=0: max |psi* - psi*_analytic| = "
 # x, z, t still hold the t = 30 d grid from the loop above.
 print("\n(comparison grid: t = %.1f d)" % t[0].item())
 
-net_r = NearPhysical(PINN(cfg, BOUNDS))   # fresh init, no load_state_dict
+net_r = NearPhysical(PINN(cfg, BOUNDS), **kw)  # fresh init, no load_state_dict
 net_r.eval()
 with torch.no_grad():
     out_r = net_r(x, z, t)

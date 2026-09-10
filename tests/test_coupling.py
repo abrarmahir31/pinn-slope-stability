@@ -400,3 +400,28 @@ def test_tm_is_strain_sensitive_but_barely_strains():
             lo, hi = (mid, hi) if f < 1.10 else (lo, mid)
         e10[mat.tag] = 0.5 * (lo + hi)
     assert e10["Mk_d"] / e10["Tm"] > 5.0       # Tm far more sensitive per strain
+
+# --------------------------------------------------------------------------
+# Day 26: is_on must not fail open
+# --------------------------------------------------------------------------
+def test_is_on_raises_on_an_unknown_tag():
+    """The mutation: `is_on` falls through to `self.enabled` for a tag it does
+    not recognise. Then `KC_DEFAULT.is_on("TM")` is True, a misspelled stratum
+    in L_PDE silently receives the feedback D-3.3.2 excluded Tm from, and the
+    Step 6.2 ablation compares two arms that differ by a typo."""
+    from src.coupling import KC_DEFAULT, KCConfig
+    with pytest.raises(KeyError, match="unknown stratum tag"):
+        KC_DEFAULT.is_on("TM")
+    with pytest.raises(KeyError, match="unknown stratum tag"):
+        KCConfig(enabled=True).is_on("XX")
+
+
+def test_is_on_still_answers_the_three_real_strata_and_the_global_query():
+    """The guard must not change any answer that was already correct."""
+    from src.coupling import KC_DEFAULT, KC_OFF, KC_ON
+    assert KC_DEFAULT.is_on("Mk") is True
+    assert KC_DEFAULT.is_on("Mk_d") is True
+    assert KC_DEFAULT.is_on("Tm") is False        # D-3.3.2
+    assert KC_DEFAULT.is_on() is True             # global setting
+    assert KC_OFF.is_on() is False
+    assert KC_ON.is_on("Tm") is True

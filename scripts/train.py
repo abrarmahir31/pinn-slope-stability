@@ -68,7 +68,8 @@ from src.model import PINN, NearPhysical
 from src.sampling import (sample_boundary, sample_interfaces, sample_interior,
                           to_device)
 from src.sigma0 import attach_sigma0
-from src.weighting import (PI_SEED_8X64, BalancerConfig, LossBalancer, TERMS)
+from src.weighting import (PI_SEED_8X64, PI_SEED_8X64_T0,
+                           BalancerConfig, LossBalancer, TERMS)
 def _atomic_save(payload, path):
     tmp = f"{path}.tmp"
     torch.save(payload, tmp)
@@ -156,6 +157,18 @@ def parse(argv=None):
                    help="NearPhysical psi perturbation scale. 3e-3 (the "
                         "pre-Day-25 value) caps psi excursion at 0.5 m of "
                         "head, which contradicts the Tm rain flux BC.")
+    g.add_argument("--seed-source", choices=("formula", "t0", "geomean"),
+                   default="formula",
+                   help="which D-W.7 seed to start the balancer from, at "
+                        "layers>=8. formula = pi_seed(), derived from the Pi "
+                        "groups and the ansatz prefactors, no measurement -- "
+                        "the DEFAULT since Day 26. t0 and geomean are the "
+                        "measured w^ columns, kept as ablation arms: "
+                        "scripts/seed_variance.py shows w^[pde_richards] "
+                        "moving 1264x across sampling seeds at N=1200, so "
+                        "they are samples of a heavy tail rather than "
+                        "constants. formula wins the matched three-arm "
+                        "ablation on five of seven terms.")
     return ap.parse_args(argv)
    
 # ---------------------------------------------------------------------------
@@ -177,7 +190,15 @@ def main(argv=None) -> int:
     # 8x64 but 386x BELOW it at 2x64. The required w^ = 2.9e-06 is outside
     # the +/-3 order clip on c, so without the seed the balancer clamps and
     # leaves pde_mech ~340x over-weighted for the whole run.
-    seed_w = PI_SEED_8X64 if a.layers >= 8 else None
+    if a.layers >= 8:
+        seed_w = {"t0": PI_SEED_8X64_T0,
+                  "geomean": PI_SEED_8X64,
+                  "formula": None}[a.seed_source]
+    else:
+        seed_w = None
+    print(f"seed source: {a.seed_source}"
+          + ("" if seed_w is None else
+             "  " + "  ".join(f"{k}={v:.3g}" for k, v in sorted(seed_w.items()))))
     bal = LossBalancer(TERMS, net.parameters(),
                        BalancerConfig(warmup=a.warmup, every=a.every,
                                       lam=a.lam, seed=seed_w))

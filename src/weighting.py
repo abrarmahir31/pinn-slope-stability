@@ -135,7 +135,18 @@ was scaled so Pi_M_body = 3.0019 makes it O(1); the Richards residual was
 left at normalise="none" with Pi_R_grav = 1.5401e-3, on the sound D-S.4
 argument that no term dominates inside that equation. The ratio 1949 is not
 an emergent property of training -- it is arithmetic available before the
-first epoch, and squared (3.8e6) it is the p = 1 weight for pde_richards.
+first epoch.
+
+D-W.7a (Day 26) -- THE PI GROUPS ARE ONLY HALF OF THAT ARITHMETIC. The other
+half is the ansatz: `NearPhysical` multiplies the raw network by eps_psi in
+psi* and by eps_uv in u*, v*, and those factors sit in front of the network's
+contribution to the residual exactly as the Pi groups do. The seed is
+((Pi_M*eps_uv)/(Pi_R*eps_psi))^2, not (Pi_M/Pi_R)^2. Under the pre-Day-25
+ansatz (eps_psi = 3e-3, eps_uv = 1e-3) the omitted ratio was 1/3 and the
+error was 9x, which the correction absorbed without complaint; at eps_psi =
+0.3 the same omission is 9e4 and puts the correction outside the clip. A
+seed that is wrong by a factor small enough to hide is the most expensive
+kind, and it hid for eleven days.
 
 Handing that to GradNorm to discover costs the whole warm-up budget, which
 is the failure the roadmap warns about for skipped non-dimensionalisation.
@@ -143,6 +154,29 @@ So `PI_SEED` supplies it statically and the balancer corrects the remaining
 factor, which is O(10-100) and lives comfortably inside the clip. This also
 keeps the two mechanisms separable in the methods section: the seed is
 derived, the correction is measured, and `report()` prints both.
+
+D-W.7b (Day 26) -- AND THE SEED MUST BE DERIVED, NOT MEASURED.
+The obvious improvement on D-W.7 is to skip the algebra and seed from the
+measured `w^` column instead, since that captures effects no Pi group
+contains (depth, K_r nonlinearity). It does not work, and the reason is not
+a detail. `scripts/seed_variance.py` varies only the collocation draw:
+`w^[pde_richards]` moves 1264x across three sampling seeds at N = 1200 and
+`w^[pde_mech]` 30-45x, while every boundary and IC term stays inside 3x. The
+spread GROWS with N -- the opposite of Monte-Carlo convergence, and the mark
+of an estimator dominated by rare extreme samples, which is what a squared
+Richards residual is when K_r spans nine orders across the domain.
+
+A quantity that moves 1264x between two draws of the same objective cannot be
+seeded from one draw: the +3 clip is 1e3, so WHICH DRAW YOU MEASURED decides
+whether the run ends up clipped. That is one explanation for three failures --
+the 16 Aug seed going stale, `t0` clipping at +3 by step 400, and the
+geometric mean of two such draws clipping at -3 by step 200. The matched
+three-arm ablation has `pi_seed()` winning five of seven terms and the
+weighted-gradient spread. `--seed-source` defaults to `formula` accordingly;
+the measured columns survive as ablation arms.
+
+The boundary and IC terms are stable across draws, so `ic_disp`'s 4.7e+04 is
+a real requirement rather than noise -- see D-W.2 and docs/open_items.md.
 
 The seed must NOT be implemented by dividing the Richards residual -- that
 is what D-S.4 rejected, and rightly: rescaling residual and gradient
@@ -188,12 +222,16 @@ That is what tests/test_weighting.py guards.
 
 OPEN -- for docs/open_items.md
 ------------------------------
-- [ ] `interface` carries w0 = 3.8e6 while frozen, so it enters the objective
-      at full seed weight the instant it activates. The balancer corrects it
-      within a few updates, but the first weighted step is a shock. Consider a
-      ramp over ~10 updates on transition from frozen to active. Not urgent:
-      the term activates when drawdown reaches the Mk/Tm contact, which is
-      well after the Adam warm-up.
+- [ ] `interface` no longer freezes at t = 0. At eps_psi = 0.3 the flux jump
+      is 5.85e-06 rather than identically zero, so its gradient norm (9.88e-04)
+      sits eight orders above `activity_floor * g_max` and the term is active
+      from step 0. D-W.4's premise is therefore false as written. The seed
+      shock it warned about is much smaller now -- w0 = 42.2, not 3.8e6 -- but
+      the term is being weighted on a numerical residual, not a physical one,
+      until drawdown actually reaches the Mk/Tm contact.
+- [ ] `ic_disp` is 4.71e+04 below the bc_mech anchor and will sit pinned at
+      the correction clip for the whole run. Its gradient norm did not change
+      between the two ansaetze; the ANCHOR grew 1154x. See D-W.2 below.
 - [ ] The seed applies (Pi_M_body/Pi_R_grav)^2 to `pde_richards`, using the
       GRAVITY group. Pi_R_diff = 1.4948e-3 differs from Pi_R_grav = 1.5401e-3
       by 3%, which is inside the noise here, but the choice should be recorded
@@ -343,42 +381,199 @@ _PI_M_BODY = 3.0019       # rho_b_ref g L_ref / sig_ref     (mechanical, O(1))
 _PI_R_GRAV = 1.5401e-3    # K_ref T_ref / (L_ref dtheta_ref)
 _PI_R_DIFF = 1.4948e-3    # K_ref T_ref H_ref / (L_ref^2 dtheta_ref)
 
+#: Ansatz prefactors from `model.NearPhysical.__init__`. Duplicated here as
+#: literals for the same reason as the Pi groups -- this module must import in
+#: a bare environment -- and pinned to the wrapper's signature by
+#: `test_pi_seed_eps_literals_match_nearphysical`.
+_EPS_PSI = 0.3            # psi*   = psi0* + eps_psi * net
+_EPS_UV = 1e-3            # u*, v* =         eps_uv  * net
 
-def pi_seed(pi_m: float = _PI_M_BODY, pi_r: float = _PI_R_GRAV
+
+def pi_seed(pi_m: float = _PI_M_BODY, pi_r: float = _PI_R_GRAV,
+            eps_psi: float = _EPS_PSI, eps_uv: float = _EPS_UV
             ) -> Dict[str, float]:
     """Static weights w0 from the ratio the scaling decisions left open.
 
     The Richards residual carries Pi_R ~ 1.54e-3 where the mechanical one
     carries Pi_M_body = 3.0019. Both are correct choices (D-S.4 closed the
     Richards scaling as normalise="none"; Pi_M_body was chosen to make the
-    mechanical residual O(1)); the CROSS-equation ratio is the leftover, and
-    it is (Pi_M/Pi_R)^2 in the squared loss.
+    mechanical residual O(1)); the CROSS-equation ratio is the leftover.
+
+    THE PI GROUPS ARE NOT THE WHOLE PREFACTOR (Day 26). What multiplies the
+    network inside each residual is the Pi group AND the ansatz scale that
+    `NearPhysical` puts in front of the raw net:
+
+        psi* = psi0* + eps_psi * net        ->  d(R_richards)/d(theta) ~ Pi_R * eps_psi
+        u*, v* =       eps_uv  * net        ->  d(R_mech)/d(theta)     ~ Pi_M * eps_uv
+
+    grad L_i = (2/N) sum_k r_ik grad r_ik carries that factor in BOTH slots,
+    so the cross-equation seed is the squared ratio of the two sensitivities:
+
+        w0[pde_richards] = ((Pi_M * eps_uv) / (Pi_R * eps_psi))^2
+
+    Omitting the eps factors was invisible until Day 25 because the old
+    ansatz had eps_psi = 3e-3 against eps_uv = 1e-3: the ratio was 1/3 and
+    the seed was wrong by 9x, well inside the correction clip. At the Day 25
+    value eps_psi = 0.3 the ratio is 1/300 and the omission is a factor of
+    9e4 -- (Pi_M/Pi_R)^2 = 3.799e+06 where the correct seed is 4.221e+01.
+
+    Measured check, docs/gradnorm_epspsi03.json (8x64, N=300, t=0): the
+    required cross-equation weight is w^ = 6.93e+02 against pde_mech, 3.47
+    against the bc_mech anchor. The formula's 42.2 leaves c = 16.4 and 0.082
+    respectively -- both inside the +/-3 clip, which is what D-W.7 promises.
+    The residual 16x is van Genuchten K_r nonlinearity and is NOT a prefactor;
+    it is exactly the part the balancer is supposed to measure. The uncorrected
+    3.799e+06 leaves c = 1.8e-04 and 9.1e-07, i.e. clipped and stuck.
 
     Only the Richards terms are seeded. The mechanical PDE and all the
     boundary/initial terms live on the mechanical scale already and start at
     w0 = 1, so any weight they end up with is a measured correction and can
     be reported as such.
     """
-    r = (pi_m / pi_r) ** 2
+    r = ((pi_m * eps_uv) / (pi_r * eps_psi)) ** 2
     return {"bc_mech": 1.0, "pde_mech": 1.0, "bc": 1.0,
             "ic_disp": 1.0, "ic_head": 1.0,
             "pde_richards": r, "interface": r}
 
 
 PI_SEED = pi_seed()
+
+
+def seed_from_gradnorms(grad_norms: Mapping[str, float],
+                        anchor: str = "bc_mech",
+                        hold: Iterable[str] = (),
+                        base: Optional[Mapping[str, float]] = None,
+                        grad_norms_1: Optional[Mapping[str, float]] = None
+                        ) -> Dict[str, float]:
+    """w0 = g_anchor / g_i, the `w^` column of `scripts/grad_norm_table.py`.
+
+    The measured counterpart to `pi_seed()`. Use it when the analytic
+    prefactor is known to be incomplete -- at 8x64 the depth-dependent part
+    of the gradient (second derivatives of u*, v* through eight tanh layers)
+    is not in any Pi group, and neither is van Genuchten K_r nonlinearity.
+
+    PASS BOTH SNAPSHOTS (D-W.0b). With `grad_norms_1` the seed is the
+    GEOMETRIC MEAN of the two w^ columns rather than the t = 0 one. D-W.0b
+    has said since the module was written that a weight fitted only at the
+    initialisation is fitted to the satisfaction-limited regime, and
+    `pde_richards` is the proof: it needs w^ = 3.47 at t = 0 and 3.87e+03
+    after 500 Adam steps, a factor of 1117. Seeded on t = 0 alone it goes
+    from c = 1 to the +3 clip in under 400 epochs and stays there -- measured,
+    runs/prod02_smoke, Day 26. The geometric mean puts the two states at
+    +/-1.5 orders either side of the seed, both inside the clip, which is the
+    most a single static number can do for a term whose regime changes.
+
+    `hold` names terms that keep their `base` value instead of the measured
+    one. That is not a convenience: a term whose residual is small BECAUSE
+    the initial state satisfies it (p ~ 0.5 in `regime_exponents`) returns a
+    huge w^ that would amplify a satisfaction, not correct a scaling. D-W.4
+    makes that argument for `interface`; it applies verbatim to `ic_disp`.
+    """
+    base = dict(PI_SEED if base is None else base)
+    hold = set(hold)
+    out = dict(base)
+    for k, g in grad_norms.items():
+        if k in hold or g <= 0.0:
+            continue
+        w = grad_norms[anchor] / g
+        if grad_norms_1 is not None:
+            g1 = grad_norms_1.get(k, 0.0)
+            if g1 <= 0.0:
+                continue
+            w = math.sqrt(w * (grad_norms_1[anchor] / g1))
+        out[k] = w
+    return out
+
+
+#: Measured `grad_norms` column of docs/gradnorm_epspsi03.json -- 8x64,
+#: N = 300, seed 20250812, eps_psi = 0.3, snapshot at t = 0 before the 500
+#: Adam steps. Literals rather than a JSON read so this module still imports
+#: in a bare environment; `test_pi_seed_8x64_matches_the_measurement_file`
+#: recomputes them from the file and fails on drift.
+GRADNORM_8X64_EPSPSI03 = {
+    "pde_richards": 6.477820636495887e-01,
+    "pde_mech":     4.4869889195092634e+02,
+    "bc":           1.5893767231228000e+00,
+    "bc_mech":      2.2450739729471088e+00,
+    "interface":    9.8820607064799980e-04,
+    "ic_head":      4.4103547621063570e+00,
+    "ic_disp":      4.7617973769774320e-05,
+}
+
+#: The SECOND measurement D-W.0b asks for: same file, `grad_norms_1`, after
+#: 500 Adam steps. It has been sitting in the repo unused since 2 Sep while
+#: both the old and the first Day 26 seed were fitted to t = 0 alone.
+GRADNORM_8X64_EPSPSI03_STEP500 = {
+    "pde_richards": 2.7370554299304143e-05,
+    "pde_mech":     2.0483773838492753e-01,
+    "bc":           1.9550265979469080e-01,
+    "bc_mech":      1.0593485057918546e-01,
+    "interface":    5.4246416914212370e-23,
+    "ic_head":      1.1647564712151513e-01,
+    "ic_disp":      7.2183889046512000e-06,
+}
+
 #: Architecture-dependent override for the 8x64 production network.
-#: Measured 16 Aug, N = 3000, seed 20250812: pde_mech's gradient norm is
-#: 5.18e+02 against the anchor's 1.52e-03, i.e. 342,000x. Second derivatives
-#: of u*, v* compound through eight tanh layers; at 2x64 the same term sits
-#: 386x BELOW the anchor. The required w^ = 2.925e-06 is outside the +/-3
-#: order clip on c, so without this seed the balancer clamps at c = 1e-3 and
-#: leaves pde_mech ~340x over-weighted for the whole run.
 #:
-#: This makes explicit that D-W.2's premise -- bc_mech holds the largest
-#: gradient -- is ARCHITECTURE-DEPENDENT. True at 2x64, false by five orders
-#: at 8x64. The anchor-vs-geomean comparison that settled D-W.2 was run at
-#: 2x64 and must be repeated at 8 before any production run.
-PI_SEED_8X64 = dict(PI_SEED, pde_mech=2.925e-06)
+#: SUPERSEDES the 16 Aug value (pde_mech = 2.925e-06). That was measured under
+#: eps_psi = 3e-3, where psi* could not move more than 0.5 m of head and the
+#: three psi-driven terms were satisfied by construction. Every ratio taken
+#: against them was a ratio against a structural zero.
+#:
+#: Geometric mean of the t = 0 and 500-step columns, per D-W.0b. The two
+#: differ by 1117x on `pde_richards` (3.47 -> 3.87e+03), because at t = 0 the
+#: term is satisfaction-limited and by step 500 it is not. Seeding on t = 0
+#: alone drives the correction into the +3 clip inside 400 epochs and holds
+#: it there for the rest of the run -- measured, runs/prod02_smoke, Day 26.
+#: The geometric mean leaves c = 3.0e-02 at t = 0 and 33.4 at step 500, both
+#: comfortably inside.
+#:
+#: D-W.2's premise -- bc_mech holds the largest gradient -- remains false at
+#: depth: pde_mech measures 200x the anchor at 8x64 and 386x BELOW it at 2x64.
+#: Worse, 99.9% of the anchor's gradient is now the Bishop pore increment
+#: rather than anything mechanical (docs/open_items.md, Day 26). The
+#: anchor-vs-geomean comparison that settled D-W.2 was run at 2x64 and still
+#: has not been repeated at 8. EVERY NUMBER BELOW IS NORMALISED AGAINST THAT
+#: ANCHOR.
+#:
+#: HELD, not measured:
+#:   ic_disp   w^ = 4.71e+04 at t = 0, 1.47e+04 at step 500, p = 0.57.
+#:             Satisfaction-limited: u* = v* = 0 IS the solution at t = 0, so
+#:             the small gradient is the answer being right, not the term
+#:             being under-scaled.
+#:   interface w^ = 2.27e+03 at t = 0 and 1.95e+21 at step 500 -- it falls
+#:             back below `activity_floor` once training starts and freezes
+#:             (confirmed in prod02_smoke). D-W.4, with the Day 25 amendment
+#:             that the t = 0 flux jump is no longer identically zero
+#:             (5.85e-06). Held at the pi_seed value.
+#: THE MEASURED COLUMN IS NOT A MEASUREMENT FOR THE TWO PDE TERMS (Day 26).
+#: `scripts/seed_variance.py` varies only the collocation draw and finds
+#: `w^[pde_richards]` moving 1264x across three sampling seeds at N = 1200,
+#: and `w^[pde_mech]` 30-45x, while every boundary and IC term stays inside
+#: 2-3x. The spread GROWS with N, which is the opposite of Monte-Carlo
+#: convergence and the signature of an estimator dominated by rare extreme
+#: samples -- van Genuchten K_r spans nine orders across this domain, so the
+#: squared Richards residual and its gradient are set by whichever few points
+#: land in the extreme cells.
+#:
+#: So both seeds below are samples of a heavy tail, not constants, and that
+#: is the single explanation for the 16 Aug seed going stale, for `t0`
+#: clipping at +3 by step 400, and for `geomean` clipping at -3 by step 200.
+#: They are kept as NAMED ABLATION ARMS (`--seed-source`), not as defaults.
+#: `pi_seed()` does not depend on a draw and wins the three-arm matched
+#: ablation on five of seven terms (docs/open_items.md, Day 26).
+#:
+#: The boundary and IC terms ARE stable across draws, so `ic_disp`'s 4.7e+04
+#: is a real requirement rather than noise. It needs the anchor decision.
+PI_SEED_8X64 = seed_from_gradnorms(GRADNORM_8X64_EPSPSI03,
+                                   grad_norms_1=GRADNORM_8X64_EPSPSI03_STEP500,
+                                   anchor="bc_mech",
+                                   hold=("ic_disp", "interface"))
+
+#: The t = 0 column alone -- the seed D-W.7 would give without D-W.0b.
+PI_SEED_8X64_T0 = seed_from_gradnorms(GRADNORM_8X64_EPSPSI03,
+                                      anchor="bc_mech",
+                                      hold=("ic_disp", "interface"))
 
 
 @dataclass
@@ -696,8 +891,9 @@ if __name__ == "__main__":
     print("             p = 0.5      : "
           f"{sum(math.sqrt(la * v) for k, v in BASELINE_LOSSES.items() if k in b):.4e}")
     print(f"             p = 1        : {la * len(b):.4e}")
-    print("\nD-W.7 static seed from the Pi groups "
-          f"((Pi_M_body/Pi_R_grav)^2 = {PI_SEED['pde_richards']:.3e}):")
+    print("\nD-W.7 static seed from the Pi groups and the ansatz prefactors "
+          f"(((Pi_M_body*eps_uv)/(Pi_R_grav*eps_psi))^2 = "
+          f"{PI_SEED['pde_richards']:.3e}):")
     for k, v in PI_SEED.items():
         print(f"  w0[{k}] = {v:.4e}")
     print("\nThe adaptive correction c only has to cover what the seed misses.")

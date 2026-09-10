@@ -374,27 +374,59 @@ def test_bounds_exclude_interface():
 # --------------------------------------------------------------------------
 # 3. the static seed (D-W.7)
 # --------------------------------------------------------------------------
-def test_pi_seed_is_the_squared_group_ratio():
-    """The seed is arithmetic, not a tuned number. If Pi_M_body or Pi_R_grav
-    changes in nondim.py this must change with it, or the objective silently
-    stops matching the scaling."""
-    from weighting import _PI_M_BODY, _PI_R_GRAV
-    assert PI_SEED["pde_richards"] == pytest.approx((_PI_M_BODY / _PI_R_GRAV) ** 2)
-    assert PI_SEED["pde_richards"] == pytest.approx(3.799e6, rel=0.01)
+def test_pi_seed_is_the_squared_sensitivity_ratio():
+    """The seed is arithmetic, not a tuned number. If Pi_M_body, Pi_R_grav or
+    either ansatz prefactor changes, this must change with it, or the
+    objective silently stops matching the scaling.
+
+    The eps factors are half the formula: what multiplies the network inside
+    each residual is Pi * eps, not Pi. See pi_seed's docstring."""
+    from weighting import _PI_M_BODY, _PI_R_GRAV, _EPS_PSI, _EPS_UV
+    assert PI_SEED["pde_richards"] == pytest.approx(
+        ((_PI_M_BODY * _EPS_UV) / (_PI_R_GRAV * _EPS_PSI)) ** 2)
+    assert PI_SEED["pde_richards"] == pytest.approx(4.221e1, rel=0.01)
     for k in ("bc_mech", "pde_mech", "bc", "ic_disp", "ic_head"):
         assert PI_SEED[k] == 1.0
+
+
+def test_pi_seed_eps_literals_match_nearphysical():
+    """weighting.py duplicates the ansatz prefactors as literals so it imports
+    in a bare environment. They must not drift from the wrapper that actually
+    applies them -- the Day 25 failure was exactly a stale eps_psi."""
+    import inspect
+    from src.model import NearPhysical
+    from weighting import _EPS_PSI, _EPS_UV
+    p = inspect.signature(NearPhysical.__init__).parameters
+    assert _EPS_PSI == p["eps_psi"].default
+    assert _EPS_UV == p["eps_uv"].default
+
+
+def test_omitting_eps_was_a_factor_of_nine_under_the_old_ansatz():
+    """Why the bug survived to Day 25. At eps_psi = 3e-3 the omitted ratio
+    eps_uv/eps_psi was 1/3, so the seed was wrong by 9x and sat inside the
+    clip. At eps_psi = 0.3 the same omission is 9e4."""
+    from weighting import _PI_M_BODY, _PI_R_GRAV, pi_seed
+    naive = (_PI_M_BODY / _PI_R_GRAV) ** 2
+    assert naive / pi_seed(eps_psi=3e-3)["pde_richards"] == pytest.approx(9.0)
+    assert naive / pi_seed(eps_psi=0.3)["pde_richards"] == pytest.approx(9e4)
 
 
 def test_seed_brings_the_p1_weight_inside_the_default_clip():
     """The reason D-W.7 exists. Without the seed, pde_richards at p = 1 wants
     w = 1.2e8, which the default clip of 1e3 on the correction cannot reach
-    and a clip on w would have hidden. With the seed the correction is ~32."""
+    and a clip on w would have hidden. With the seed the correction is ~284.
+
+    BASELINE_LOSSES was measured at the Step 3.3 state, which is eps_psi =
+    3e-3, so the seed it must be checked against is the one for that ansatz.
+    Checking it against the eps_psi = 0.3 seed compares a loss table and a
+    weight taken under two different networks -- which is the Day 25 error in
+    miniature."""
     need = BASELINE_LOSSES["bc_mech"] / BASELINE_LOSSES["pde_richards"]
-    c = need / PI_SEED["pde_richards"]
+    c = need / pi_seed(eps_psi=3e-3)["pde_richards"]
     lo, hi = BalancerConfig().log_clip
     assert not lo <= math.log10(need) <= hi          # unseeded: out of reach
     assert lo <= math.log10(c) <= hi                 # seeded: comfortable
-    assert c == pytest.approx(31.6, rel=0.1)
+    assert c == pytest.approx(284.0, rel=0.02)
 
 
 def test_seed_mismatch_on_resume_is_an_error(toy):
@@ -409,6 +441,83 @@ def test_seed_mismatch_on_resume_is_an_error(toy):
     with pytest.raises(ValueError, match="seed differs"):
         other.load_state_dict(d)
 
+def test_pi_seed_8x64_matches_the_measurement_file():
+    """PI_SEED_8X64 is no longer arithmetic -- it is a measurement, so it can
+    go stale silently in a way pi_seed() cannot. Bind the literals to the JSON
+    they were read from. The 16 Aug seed went stale exactly this way: it
+    outlived the eps_psi it was measured under by three weeks."""
+    import json
+    import pathlib
+    from weighting import GRADNORM_8X64_EPSPSI03
+    p = (pathlib.Path(__file__).resolve().parents[1]
+         / "docs" / "gradnorm_epspsi03.json")
+    meas = json.loads(p.read_text())["grad_norms"]
+    assert set(meas) == set(GRADNORM_8X64_EPSPSI03)
+    for k, v in meas.items():
+        assert GRADNORM_8X64_EPSPSI03[k] == pytest.approx(v, rel=1e-12)
+
+
+def test_pi_seed_8x64_is_the_geometric_mean_of_both_snapshots():
+    """D-W.0b in code. The seed must not be the t = 0 column alone: at t = 0
+    `pde_richards` is satisfaction-limited and asks for w^ = 3.47, by step 500
+    it asks for 3.87e+03, and a seed fitted to the first is clipped within 400
+    epochs (runs/prod02_smoke, Day 26).
+
+    The two held terms are the point of the seed, not an exception to it. A
+    satisfaction-limited term returns a huge w^ and must not be seeded with
+    it -- D-W.4 for `interface`, p = 0.57 for `ic_disp`."""
+    from weighting import (GRADNORM_8X64_EPSPSI03,
+                           GRADNORM_8X64_EPSPSI03_STEP500, PI_SEED_8X64)
+    g0, g1 = GRADNORM_8X64_EPSPSI03, GRADNORM_8X64_EPSPSI03_STEP500
+    for k in ("pde_richards", "pde_mech", "bc", "ic_head"):
+        w0 = g0["bc_mech"] / g0[k]
+        w1 = g1["bc_mech"] / g1[k]
+        assert PI_SEED_8X64[k] == pytest.approx(math.sqrt(w0 * w1))
+    assert PI_SEED_8X64["bc_mech"] == 1.0
+    assert PI_SEED_8X64["ic_disp"] == PI_SEED["ic_disp"]
+    assert PI_SEED_8X64["interface"] == PI_SEED["interface"]
+    # the regime change the geometric mean exists to straddle, on record
+    assert (g1["bc_mech"] / g1["pde_richards"]) / \
+           (g0["bc_mech"] / g0["pde_richards"]) == pytest.approx(1117, rel=0.01)
+
+
+def test_pi_seed_8x64_corrections_are_inside_the_clip_except_ic_disp():
+    """The seed exists so the balancer never runs clipped -- at EITHER end of
+    the regime change, which is what the geometric mean buys.
+
+    `ic_disp` is the exception and this test records it rather than hiding it.
+    Its gradient norm is identical under both ansaetze (4.7618e-05, it has no
+    psi dependence) while the bc_mech anchor grew 1154x when eps_psi went to
+    0.3. So w^ went 4.09e+01 -> 4.71e+04 without ic_disp changing at all, and
+    a term held at w0 = 1 now needs a correction 1.7 orders past the clip.
+    Confirmed in runs/prod02_smoke: clipped from step 100 onward.
+
+    Seeding it at 4.71e+04 is NOT obviously the fix -- u* = v* = 0 is the
+    correct answer at t = 0 -- but neither is leaving it pinned. The decision
+    is upstream, in the choice of anchor. docs/open_items.md, Day 26."""
+    from weighting import (GRADNORM_8X64_EPSPSI03,
+                           GRADNORM_8X64_EPSPSI03_STEP500, PI_SEED_8X64)
+    lo, hi = BalancerConfig().log_clip
+    for snap in (GRADNORM_8X64_EPSPSI03, GRADNORM_8X64_EPSPSI03_STEP500):
+        ga = snap["bc_mech"]
+        for k in ("pde_richards", "pde_mech", "bc", "ic_head", "bc_mech"):
+            c = (ga / snap[k]) / PI_SEED_8X64[k]
+            assert lo <= math.log10(c) <= hi, f"{k} clipped at c = {c:.3e}"
+
+    # pde_richards is the term the geometric mean was introduced for: it
+    # straddles the regime change symmetrically instead of failing at one end.
+    g0, g1 = GRADNORM_8X64_EPSPSI03, GRADNORM_8X64_EPSPSI03_STEP500
+    c0 = (g0["bc_mech"] / g0["pde_richards"]) / PI_SEED_8X64["pde_richards"]
+    c1 = (g1["bc_mech"] / g1["pde_richards"]) / PI_SEED_8X64["pde_richards"]
+    assert math.log10(c0) == pytest.approx(-math.log10(c1), rel=1e-6)
+    assert abs(math.log10(c0)) == pytest.approx(1.52, abs=0.01)
+
+    ga = GRADNORM_8X64_EPSPSI03["bc_mech"]
+    c_disp = (ga / GRADNORM_8X64_EPSPSI03["ic_disp"]) / PI_SEED_8X64["ic_disp"]
+    assert math.log10(c_disp) > hi                  # known, tracked, not fixed
+    assert c_disp == pytest.approx(4.71e4, rel=0.01)
+
+
 def test_pi_seed_literals_match_nondim():
     """PI_SEED hardcodes the groups so weighting.py imports in a bare test
     env. E_ref and dtheta_ref are both open items; if either moves, the seed
@@ -417,3 +526,41 @@ def test_pi_seed_literals_match_nondim():
     from src.weighting import _PI_M_BODY, _PI_R_GRAV
     assert _PI_M_BODY == pytest.approx(SCALES.Pi_M_body, rel=1e-4)
     assert _PI_R_GRAV == pytest.approx(SCALES.Pi_R_grav, rel=1e-4)
+
+
+def test_the_measured_pde_seeds_are_not_reproducible_across_draws():
+    """Day 26. The reason `--seed-source` defaults to `formula`.
+
+    D-W.7 is only legitimate if w^ is a property of the objective rather than
+    of the collocation draw. scripts/seed_variance.py measures it: the two PDE
+    residual terms move by more than the entire +/-3 clip across three
+    sampling seeds, while every boundary and IC term stays inside 3x. A seed
+    taken from a single draw of the first group is fitting a heavy tail.
+
+    This test pins the recorded numbers so the claim in the module docstring
+    cannot quietly stop being true. It reads the artifact rather than
+    re-measuring; regenerate with
+        PYTHONPATH=. python scripts/seed_variance.py \\
+            --json docs/seed_variance_day26.json
+    """
+    import json
+    import pathlib
+    p = (pathlib.Path(__file__).resolve().parents[1]
+         / "docs" / "seed_variance_day26.json")
+    spread = json.loads(p.read_text())["spread"]["1200"]
+    lo, hi = BalancerConfig().log_clip
+    reach = 10 ** hi              # the most the balancer can correct upward
+
+    # Two draws of the same quantity disagree by more than the balancer can
+    # correct, so which draw you seeded from decides whether you end up
+    # clipped -- which is exactly what happened to `t0` and `geomean`.
+    assert spread["pde_richards"] > reach, "the finding has changed"
+    assert spread["pde_richards"] == pytest.approx(1264, rel=0.05)
+    assert spread["pde_mech"] > 10
+
+    for k in ("bc", "ic_head", "ic_disp", "bc_mech"):
+        assert spread[k] < 5, f"{k} was stable across draws on Day 26"
+
+    # ic_disp's 4.7e+04 is therefore a real requirement, not a sampling
+    # artifact -- which is why it needs the anchor decision and not a seed.
+    assert spread["ic_disp"] < 5

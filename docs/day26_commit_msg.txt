@@ -1,0 +1,36 @@
+Day 26: the measured seed was never a measurement
+
+pi_seed() omitted the ansatz prefactors. What multiplies the network inside a
+residual is Pi*eps, not Pi, and grad L = (2/N) sum r grad r carries it twice,
+so the seed is ((Pi_M*eps_uv)/(Pi_R*eps_psi))^2 = 4.221e+01, not 3.799e+06.
+Invisible until Day 25 because eps_uv/eps_psi was 1/3 at eps_psi=3e-3 (a 9x
+error, absorbed by the correction); at 0.3 it is 9e4.
+
+Seeding from the measured w^ column instead does not work. scripts/seed_variance.py
+varies only the collocation draw: w^[pde_richards] moves 1264x across three
+sampling seeds at N=1200, w^[pde_mech] 30-45x, while every boundary/IC term stays
+inside 3x. The spread GROWS with N - a heavy-tailed estimator, not MC noise,
+because K_r spans nine orders. 1264x exceeds the +3 clip, so which draw you
+measured decides whether you clip. One mechanism explains three failures: the
+16 Aug seed going stale, t0 clipping at +3 by step 400, geomean at -3 by step 200.
+
+Matched three-arm ablation (docs/seed_ablation_day26.json): formula wins 5/7
+terms and the weighted spread, and is the only untuned arm. --seed-source now
+defaults to formula; t0 and geomean kept as named arms. D-W.7b written into the
+weighting.py docstring.
+
+Smoke run passed all three Day 25 criteria: pde_richards in log_c_raw throughout,
+bc off the +3 clip at c=1.33, max |psi(30)-psi(0)| = 141.6 m against the old
+0.5 m cap.
+
+Also: is_on now raises on unknown tags (KC_DEFAULT.is_on("TM") returned True, so
+a typo gave Tm the feedback D-3.3.2 excludes it from). inspect_prod01.py took the
+new eps_psi default and would have reported prod01 100x too large; now takes a
+ckpt path and --eps-psi. Stale-BOUNDS item closed - config.BOUNDS agrees with
+bounds_from_geometry to 6.4 cm, already pinned by a test. README documents the two
+gitignored caches a fresh clone needs.
+
+NOT settled, gates the production run: bc_mech is 99.9% Bishop pore increment
+(grad 1.904e-03 at eps_psi=0 vs 2.245e+00 at 0.3), so D-W.2's anchor premise is
+false at 8x64. ic_disp is stable across draws, so its 4.71e+04 requirement is real
+and it clips in every arm. See docs/open_items.md, Day 26.
