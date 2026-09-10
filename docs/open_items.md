@@ -352,3 +352,54 @@ Under eps_psi = 3e-3 the IC was satisfied by construction; it is now a real
 soft constraint and no seed choice is satisfying it. `inspect_prod01.py` on the
 N=2500 smoke checkpoint shows the t=0 field off the analytic IC by up to 84 m
 of head at step 500. Watch it in the production run.
+
+
+### Day 26, evening: the Richards residual is storage-only above the water table
+
+scripts/inspect_richards_terms.py on runs/prod02/ckpt_002000.pt
+(docs/richards_terms_prod02.json). cancel = 1 in EVERY row: |R| equals the
+storage term C* dpsi*/dt* to every digit shown, with both flux terms 8-9
+orders below it, at every timestep and in every stratum.
+
+This is NOT the trained field's doing. K* on the ANALYTIC IC, before any
+training:
+
+    z (m)   psi0 (m)      Mk K*       Tm K*      Mk C*      Tm C*
+      200       -3.0   5.436e-06   2.349e-04      5.799   3.979e-01
+      240      -43.0   1.256e-08   1.542e-09     0.4036   2.018e-03
+      280      -83.0   2.468e-09   7.998e-11     0.1862   5.416e-04
+      358     -161.0   4.747e-10   4.056e-12   8.471e-02  1.440e-04
+
+With Pi_R_diff = 1.4948e-03 and K* ~ 1e-9, the diffusion term is ~1e-12 while
+storage is ~0.1 * dpsi*/dt*. Balancing them needs dpsi*/dt* ~ 1e-11, i.e. a
+frozen field. Above roughly z = 210 m the non-dimensionalised Richards
+equation IS C* dpsi*/dt* = 0, and it is correct: K_sat ~ 1e-6 m/s times
+K_r ~ 1e-9 gives an effective conductivity near 1e-15 m/s, over which 30 days
+is nothing. All live physics is within a few metres of the water table, where
+K* jumps four to six orders.
+
+CONSEQUENCES.
+- Explains the seed-variance finding directly. Collocation is uniform, ~87% of
+  points land where the residual is trivially satisfied, and the gradient is
+  set by whichever few fall near the water table. That IS a heavy-tailed
+  estimator; same root cause as w^[pde_richards] moving 1264x across draws.
+- Explains the 150 m IC violation. Where the residual carries no information,
+  psi is held only by ic_head and bc. The balancer down-weighted ic_head 34x
+  (w = 2.958e-02) because its raw gradient was second-largest, so psi in the
+  inert zone was left nearly unconstrained and drifted.
+- pde_richards = 2.98e-05 is therefore neither solved nor bought. It is mostly
+  TRIVIAL, and non-trivial only in a thin band.
+
+NEXT, in order:
+1. Stratified or adaptive collocation concentrated near the water table and
+   the wetting front. Most leverage, cheapest to test.
+2. Revisit D-S.4. `normalise="none"` assumed both Richards terms are O(1).
+   They are O(1) only near saturation. Restate with this evidence.
+3. The anchor decision drops to third. Rebalancing weights cannot help while
+   most collocation points carry no signal.
+
+CAVEAT: the verdict labels in the script are miscalibrated. `hydrostatic?` at
+t = 30 is wrong -- K/K_ic is 2.9 / 1.5 / 5.1 there, i.e. WETTER than the IC,
+which is directionally right for a rain BC. Tm's DRY-COLLAPSE at t = 0, 1, 7
+is the IC violation, not a dry corner. The script should measure
+max(flux)/storage, not max(term)/|R|.
