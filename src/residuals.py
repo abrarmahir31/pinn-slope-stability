@@ -119,21 +119,35 @@ def richards_residual(fields, x: Tensor, z: Tensor, t: Tensor, mat,
     x, z, t : leaf tensors, requires_grad=True, same shape (N, 1)
     mat : a `materials.Material` OR an `SWCC` (tests pass the latter)
     normalise : how to rescale the whole equation. The Step 1.6 scaling decision is
-        CLOSED as "none" (Step 3.2, see DECISIONS.md D-S.4). Kept as a flag
-        because the branches are cheap and the choice is worth being able
-        to re-test:
+        CLOSED as "none" (Step 3.2; RESTATED Day 27, see DECISIONS.md
+        D-S.4 REVISED). Kept as a flag because the branches are cheap
+        and the choice is worth being able to re-test:
           "none"    — as written above. RESOLVED: use this.
-                         Pi_R_diff 1.4948e-3 and Pi_R_grav 1.5401e-3
-                         differ by 3%, so no term dominates INSIDE the
-                         Richards residual and a constant divisor has
-                         nothing to fix. The gap to the O(1) mechanical
-                         groups is cross-equation: total_loss weights
-                         and GradNorm handle it. Dividing here rescales
-                         residual and gradient together and only
-                         relabels the imbalance.
+                         NOT for the reason originally given. Pi_R_diff
+                         1.4948e-3 and Pi_R_grav 1.5401e-3 differ by 3%,
+                         but that is a statement about the COEFFICIENTS,
+                         not the terms: both terms carry K* or dK*/dpsi*,
+                         which span six to nine orders here. Measured
+                         (scripts/ds4_term_scales.py), diffusion/storage
+                         and gravity/storage never reach 0.1 anywhere in
+                         Section 5, and diffusion/gravity runs 2.8e-4 to
+                         0.38 rather than 1.03. "none" is kept because
+                         the imbalance is PHYSICAL -- above z ~ 210 m the
+                         flux terms are genuinely zero -- and no divisor
+                         can fix a term that is zero. The gap to the O(1)
+                         mechanical groups is cross-equation:
+                         total_loss weights and GradNorm handle it.
           "gravity" — divide through by Pi_R_grav; gravity term becomes O(1)
                       and diffusion O(H_ref/L_ref) = 0.971
-          "storage" — divide by the pointwise |C*|, if storage dominates
+          "storage" — divide by the pointwise |C*|, if storage dominates.
+                      MEASURED AND REJECTED (Day 27). C* = 0 exactly at
+                      saturation, so the `+ 1e-12` guard sets the value
+                      at every psi >= 0 point -- 19.7% of a draw on the
+                      untrained 8x64 net at eps_psi = 0.3. The loss then
+                      scales as 1/guard^2 and the apparent improvement in
+                      tail concentration is the guard flattening the
+                      distribution, not the normalisation working. See
+                      DECISIONS.md D-S.4 REVISED.
         Dividing by a positive constant cannot change where R = 0, so every
         test below passes under all three. It only changes conditioning.
     return_terms : also return the three terms separately, undivided. Use this

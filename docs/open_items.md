@@ -403,3 +403,205 @@ t = 30 is wrong -- K/K_ic is 2.9 / 1.5 / 5.1 there, i.e. WETTER than the IC,
 which is directionally right for a rain BC. Tm's DRY-COLLAPSE at t = 0, 1, 7
 is the IC violation, not a dry corner. The script should measure
 max(flux)/storage, not max(term)/|R|.
+
+## Day 27
+
+Environment: torch 2.14 CPU float64, both caches regenerated, `pytest -q` =
+307 passed / 4 skipped at start, 316 / 4 at end (9 new in
+`tests/test_sampling_front.py`). `inspect_richards_terms.py` on
+`runs/prod02/ckpt_002000.pt` reproduces the Day 26 evening table exactly:
+`cancel = 1` in all twelve rows, K/K_ic 2.9 / 1.5 / 5.1 at t = 30. The finding
+stands. Its explanation does not.
+
+### Two corrections before any of it
+
+**THE WATER TABLE IS NOT IN THE DOMAIN.** `vg.psi_initial` puts Z_WT at 197 m;
+`geometry.Z_BASE` is 200 m and `domain_bbox()` gives z in [199.5, 358.0]. The
+water table is 3 m BELOW the floor. "Concentrate collocation near the water
+table" has no referent -- the closest approach is the floor itself at
+psi_0 = -3 m. Section 5 is unsaturated everywhere at t = 0. Pinned by
+`test_the_water_table_is_below_the_domain`.
+
+**The ~87% was never tied to a criterion.** `scripts/inert_fraction.py` (new)
+removes the network from the question: it evaluates the diffusion length
+`L_ref sqrt(Pi_R_diff K*/C* t*)` and the gravity celerity
+`L_ref Pi_R_grav (dK*/dpsi*)/C* t*` on the ANALYTIC IC and calls a point inert
+when neither can move information `--reach` metres in the 30-day window.
+Artifact `docs/inert_fraction_day27.json`.
+
+    reach over 30 d     inert fraction of N = 10000
+    1 cm                64.5%
+    10 cm               94.7%
+    1 m                 99.94%   (6 live points, all within 0.1 m of the floor)
+    3 m                 100.00%
+
+87% corresponds to roughly a 5 cm threshold. The figure is threshold-dependent
+by three orders and must be quoted with its criterion in Methodology.
+
+### The domain splits by MATERIAL, not by elevation
+
+Kinematic front arrival, `q = min(rain.n, K_s)` capacity-limited, `v = q/dtheta`:
+
+    unit    q applied     v           front in 30 d   points behind front
+    Mk      1.00e-09      0.0003 m/d  0.008 m         0.04%
+    Mk_d    1.00e-09      0.0003 m/d  0.010 m         0.00%
+    Tm      3.13e-06     18.1179 m/d  543.54 m        86.58%
+
+The marls' entire response to a 30-day 20 mm/hr event is the top centimetre.
+Tm crosses the whole 158 m domain in ~9 days because dtheta = 0.0149
+(n0 = 0.0221). So the live region is a FRONT SWEEPING Tm plus a millimetric
+skin on the marls -- not a fixed band anywhere, and nothing a static
+elevation-keyed sampler can track. 35.9% of the (x, z, t) cube is live on one
+classifier or the other.
+
+- [ ] 18.1 m/d is a matrix-continuum artefact for a fracture-dominated unit.
+      Same physical objection that already justifies KC `per_unit={"Tm": False}`
+      (D-3.3.2). Cite in both places; belongs in Methodology S3 next to the
+      Tm `per_unit` exclusion already queued from Day 24.
+
+### `seed_variance.py` varies the network as well as the draw
+
+`grad_norm_table.build(seed=)` passes ONE integer to two places:
+`cfg.seed` -> `PINN.__init__` -> `torch.manual_seed` (model.py:19), and
+`sample_interior(N, seed)`. The docstring's "varies ONLY the collocation draw"
+is wrong. `scripts/seed_variance_decoupled.py` (new) runs the 2x2;
+`docs/seed_variance_decoupled_day27.json`.
+
+    N = 1200, 8x64, anchor bc_mech      draw only   init only        both
+    pde_richards                            469.9        73.4      1264.1
+    pde_mech                                  4.5         3.8        30.1
+    ic_disp / ic_head / bc / interface    1.2-1.3     1.7-3.3     1.4-3.1
+
+- [ ] CORRECTION to the Day 26 note. "The boundary and IC terms ARE stable
+      (2-3x)" attributed that to draws. Their draw-only spread is 1.2-1.3x;
+      the 2-3x was network initialisation. Conclusion unchanged -- `ic_disp`'s
+      4.71e+04 is still real -- but the sentence is wrong as written.
+- `seed_variance.py` and `docs/seed_variance_day26.json` left untouched so
+  `test_the_measured_pde_seeds_are_not_reproducible_across_draws` stays
+  reproducible.
+
+### The stratified sampler works, and does not fix what it was for
+
+`src/sampling_front.py` (new) stratifies on log-spaced initial suction
+(z - Z_WT) -- the variable K*, C*, D* and the celerity are all monotone in --
+plus a 2 m surface band that elevation cannot see, with importance weights
+restoring area fractions.
+
+Efficiency: uniform sampling puts 66% of points in the deepest, deadest suction
+band and 0.8% in the most conductive one. Live fraction at the 0.1 m criterion
+goes 5.29% -> 37.93%. On smooth integrands, against a 400k-point uniform-in-area
+reference over 10 seeds, neither sampler is detectably biased but the front
+sampler's standard error is 2.8x to 6.9x smaller. Importance sampling working
+as intended.
+
+Target metric: WORSE. `w^[pde_richards]` draw-only spread 469.9x -> 15989.5x.
+
+### Why: the loss is carried by 2-3 points, and they are spuriously saturated
+
+`scripts/residual_tail.py` (new), `docs/residual_tail_day27.json`. On an
+untrained 8x64 net at eps_psi = 0.3, **2 to 3 collocation points out of 4000
+carry 90% of `L_PDE_richards`**, under EITHER sampler. Top contributor alone is
+72.8%. All six top contributors are Tm points at psi = -0.06 to -0.47 m, where
+psi_0 should be -30 to -77 m.
+
+    psi >= 0 (saturated) on the untrained 8x64 net, uniform draw, N = 4000:
+
+        eps_psi = 3e-3    0.0%  in all three seeds, psi_max -1.5 to -2.9 m
+        eps_psi = 0.3     19.7% / 35.0% / 15.1%, psi_max +184.9 / +99.5 / +54.0 m
+        prod02 @ 2000     0.0%, psi_max -3.1 m
+
+`NearPhysical.forward` is `psi* = psi0* + eps_psi * raw` with a BARE
+`nn.Linear` output -- `raw` is unbounded. At eps_psi = 0.3 a point at the floor
+(psi0* = -0.018) saturates on any raw > 0.06. The domain is unsaturated
+everywhere by construction, so this is unphysical by up to 185 m of head, and
+the saturated FRACTION varies 15-35% with the network seed alone.
+
+**So the Day 26 causal claim is the wrong way round.** The 1264x is not the
+inert zone starving the estimator; it is the untrained ansatz reaching the van
+Genuchten singularity at psi = 0, at points chosen by the joint accident of
+network seed and draw. The front sampler made it worse because it moves points
+to LOW suction, i.e. closer to the crossing. Three separate true things were
+being conflated:
+
+1. Most points are inert. Confirmed and now quantified. Real efficiency problem.
+2. The inert points are trivially SATISFIABLE, not trivially satisfied. On
+   prod02 their median |R| is 1.24e-03 against 1.12e-05 in the live band -- the
+   dead zone supplies the BULK of the residual mass, because psi drifts in time
+   where nothing should happen. That is the 150 m IC violation showing up in
+   the residual, not an absence of signal.
+3. The 1264x tail is an ansatz problem. A sampler cannot touch it.
+
+COROLLARY for the adaptive half of item 1: residual-magnitude refinement
+(RAR/RAD) would be actively harmful, since |R| is LARGER in the dead zone. Any
+adaptive criterion must be the flux fraction max(|diffusion|,|gravity|)/|storage|
+-- the same quantity as the `inspect_richards_terms.py` verdict-label fix, so
+those two items collapse into one.
+
+### Ansatz variants measured (one network seed set, t = 0 gradients only)
+
+`w^[pde_richards]` spread at N = 1200, 8x64, eps_psi = 0.3, anchor bc_mech:
+
+    ansatz                          IC err at psi0=-3m   spread (both)   w^ range
+    psi0* + eps*raw   (current)              0.0%            1264.1x   3.4e-3..11.4
+    -softplus(-20 p)/20                    145.1%                4.1x   17.9..146
+    -softplus(-100 p)/100                    8.3%               18.4x   0.19..5.5
+    -softplus(-1000 p)/1000                  0.0%              100.0x   2.0e-3..0.26
+    psi0* - eps*softplus(raw)                0.0%                2.0x   3.5e4..7.9e4
+    psi0* * exp(eps*raw)                     0.0%                3.1x   1.4e4..4.9e4
+
+The pattern is monotone and is a TRADE-OFF, not a fix: spread falls as the cap
+softens, because softening pushes psi away from psi = 0, and softening is
+exactly what distorts the IC in the live band. `psi0* - eps*softplus(raw)` and
+`exp` both hold psi away from saturation at zero IC cost but can only dry
+(softplus) or barely wet (exp, psi_max -1.3 to -3.1 m) -- i.e. they walk back
+toward the Day 25 regime that raising eps_psi from 3e-3 existed to escape, and
+`exp` makes `pde_mech` worse (52.5x).
+
+- [ ] DECISION NEEDED, and it is now ahead of the anchor. The ansatz must
+      either bound psi <= 0 or it must not be where w^ is measured. Note
+      psi <= 0 is currently guaranteed by the model configuration --
+      `INFILTRATION_MODE = "capacity_limited"` excludes ponding, and
+      `SEEPAGE_FACE_MODE = "noflow"` zeroes the cut face -- but BOTH are
+      themselves open items, so the guarantee is conditional and must be
+      recorded as such if a bounded ansatz is adopted.
+- [ ] Everything above is one network-seed triple, t = 0, N = 1200, CPU,
+      gradient norms only. No training run. Same caveat as the Day 26 seed
+      ablation and it has NOT been discharged.
+
+### D-S.4 restated (item 2, done)
+
+`DECISIONS.md` now carries **D-S.4 REVISED**. Decision retained
+(`normalise="none"`), stated reason struck. Evidence
+`scripts/ds4_term_scales.py`, `docs/ds4_term_scales.json`. Headline: the Pi
+ratio 1.030 is a statement about COEFFICIENTS; the terms carry K* and
+dK*/dpsi*. Diffusion/storage and gravity/storage never reach 0.1 anywhere in
+Section 5 -- in Mk and Mk_d they never reach it at ANY saturation -- and
+diffusion/gravity runs 2.8e-04 to 0.38, not 1.03.
+
+`normalise="storage"` measured and rejected: it appears to fix the tail
+(top-1% share 99.3-99.95% -> 64-73%, points carrying 90% of the loss 2-3 ->
+100-127) but that is the `+1e-12` guard, which sets the value at every
+psi >= 0 point. The loss scales exactly as 1/guard^2 across 1e-12 / 1e-4 /
+1e-2; at a 1e-1 floor the top-1% share returns to 73-95% and the across-draw
+spread rises 1.3x -> 5.5x. `residuals.py`'s `normalise` docstring updated to
+match.
+
+### Item 3 not started
+
+The anchor, and replicating the seed ablation at 2-3 network seeds and
+production N, are untouched. The ansatz decision above arguably now gates
+both, for the same reason the Day 26 note gave for demoting the anchor:
+rebalancing weights measured on a field that reaches saturation over a fifth
+of the domain cannot mean anything.
+
+### New files
+
+`scripts/inert_fraction.py`, `scripts/seed_variance_decoupled.py`,
+`scripts/residual_tail.py`, `scripts/ds4_term_scales.py`,
+`src/sampling_front.py`, `tests/test_sampling_front.py`, and artifacts
+`docs/inert_fraction_day27.json`, `docs/seed_variance_decoupled_day27.json`,
+`docs/seed_variance_decoupled_front_day27.json`,
+`docs/residual_tail_day27.json`, `docs/ds4_term_scales.json`.
+`src/sampling_front.py` is NOT wired into `scripts/train.py` -- `L_PDE` and
+`L_PDE_mech` still share one `coll` (train.py:92), and splitting them is a
+separate change that should wait on the ansatz decision.

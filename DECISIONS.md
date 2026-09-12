@@ -196,6 +196,79 @@ gravity — but three docstrings, `validate_nondim.py` and the Phase-1 caveat al
 still quoted the pre-change numbers (`~3e-6`, "six orders below storage", a
 916-year timescale computed as `L^2/K` without `H` or `dtheta`). Corrected in
 Step 3.2.
+
+#### D-S.4 REVISED (Day 27) — the premise was about coefficients, not terms
+
+The decision above is **retained** (`normalise="none"`) but its stated reason
+does not survive measurement and must not go into Methodology as written.
+
+The argument was: `Pi_R_grav / Pi_R_diff = L_ref/H_ref = 1.030`, therefore "no
+term dominates INSIDE the Richards residual". That conflates the Pi groups
+with the terms they multiply:
+
+    storage     C*(psi*) dpsi*/dt*
+    diffusion   Pi_R_diff div*[K* grad* psi*]
+    gravity     Pi_R_grav (dK*/dpsi*)(dpsi*/dz*)
+
+A 3% agreement between two coefficients licenses nothing about two terms
+carrying `K*` and `dK*/dpsi*`, which under van Genuchten with n = 1.2 span six
+to nine orders across this domain. `scripts/ds4_term_scales.py` tabulates the
+ratios that actually decide it, with all field derivatives set to 1 so that
+what is being compared is the coefficient structure alone
+(`docs/ds4_term_scales.json`):
+
+    D* = Pi_R_diff K* / C*            diffusion / storage
+    G* = Pi_R_grav (dK*/dpsi*) / C*   gravity / storage
+
+              psi = -0.01 m        psi = -3 m (floor)   psi = -161 m (crest)
+    unit      D*        G*         D*        G*         D*        G*
+    Mk        1.1e-07   4.0e-04    1.4e-09   1.5e-07    8.4e-12   2.2e-11
+    Mk_d      1.4e-07   4.9e-04    1.7e-09   1.8e-07    1.0e-11   2.7e-11
+    Tm        1.5e-02   1.0e+01    8.8e-07   2.2e-04    4.2e-11   2.0e-10
+
+Bisecting for where each ratio reaches 0.1:
+
+* **Mk and Mk_d: never.** At psi = -0.1 mm, D* is still 4.9e-07 and G* 5.3e-02.
+  Neither flux term is O(1) against storage at ANY saturation in the marls.
+* **Tm: D\* at psi = -1.6 mm, G\* at psi = -0.39 m.** Both are wetter than the
+  domain floor's psi_0 = -3 m, so on the initial condition neither is O(1)
+  anywhere in Section 5 either. Tm's gravity term is the only one that
+  plausibly becomes O(1) during a run, once the front has wetted it.
+
+And the narrow diffusion-vs-gravity claim does not hold either: `D*/G*` runs
+from 2.8e-04 to 0.38 across the domain, never 1.03. It is off by between 2.6x
+and 3600x depending on where it is read.
+
+**Why `normalise="none"` is nonetheless kept.** The two alternatives are worse
+for reasons that are now measured rather than assumed.
+
+`"gravity"` divides by the constant `Pi_R_grav`, which rescales residual and
+gradient together and only relabels the imbalance. That part of the original
+argument stands.
+
+`"storage"` divides by `C.abs() + 1e-12`, converting the mixed form to the head
+form. It looks attractive on the first metric — on an untrained 8x64 net it
+takes the top-1% share of `L_PDE_richards` from 99.3-99.95% down to 64-73% and
+the number of points carrying 90% of the loss from 2-3 up to 100-127. That
+improvement is an artefact of the epsilon guard. 19.7% of collocation points on
+that net sit at psi >= 0, where `C* = 0` exactly, so those points all receive
+the same divisor `1e-12` and become a constant-weight block that flattens the
+distribution. The loss scales exactly as `1/floor^2` (4.28e+21 at 1e-12,
+4.28e+05 at 1e-04, 4.41e+01 at 1e-02); at a floor of 1e-01, where the guard
+stops dominating, the top-1% share returns to 73-95% and the across-draw spread
+rises from 1.3x to 5.5x. The head form is undefined at saturation — that is why
+the mixed form exists — and a guard constant is not a substitute for handling
+it.
+
+**What the imbalance actually is.** It is not a scaling problem inside the
+residual. Above roughly z = 210 m the equation is `C* dpsi*/dt* = 0` and is
+correctly so (`docs/richards_terms_prod02.json`,
+`docs/inert_fraction_day27.json`: at a 0.1 m / 30 d reach criterion, 94.7% of a
+production draw sits where neither flux mechanism can move information at all).
+No choice of divisor changes that, because the terms being divided are
+physically zero, not numerically awkward. The flag stays as three re-testable
+branches; the decision is now recorded as **retained on different grounds**, and
+the sentence "no term dominates inside the Richards residual" must be struck.
 ---
 
 ## Step 3.3
@@ -281,6 +354,16 @@ and a borrowed SWCC, so it belongs in the Step 6.2 sensitivity sweep.
 `KCConfig(enabled=True)` (KC everywhere), `KC_DEFAULT` (marls only), and
 `KC_OFF` (one-way). Report per-stratum as well as globally.
 
+**Day 27 addendum.** The fracture-vs-matrix argument above has a second,
+independent consequence that belongs in Methodology §3 alongside it. Treating
+Tm as a porous matrix gives it dtheta = theta_s - theta_r = 0.0149 (from
+n0 = 0.0221), and the capacity-limited rain flux q = min(rain.n, K_s) = K_s
+then implies a kinematic wetting front at v = q/dtheta = 18.1 m/day — 543 m in
+the 30-day window, crossing the whole 158 m domain in about nine days
+(`scripts/inert_fraction.py`). A piston front that fast is a matrix-continuum
+artefact of the same kind D-3.3.2 excludes KC for. Cite both together; they
+are one modelling caveat, not two.
+
 ### D-3.3.4 — L_BC_mech inherits L_BC's normalisation, which is the sampler's choice
 
 Squared residuals accumulate across segments and divide by the GLOBAL weight
@@ -311,3 +394,65 @@ as D-3.2.2.
       (max_miss_frac=0.01) while L_BC raised KeyError. Align the two
       tolerances; a 1% silent-miss allowance means sigma_0 can be wrong
       on 1% of points anywhere with no signal.
+
+---
+
+## Sampling
+
+### D-Samp.1 (Day 27) — the hydraulic and mechanical PDE losses want opposite point sets
+
+`scripts/train.py:92` builds ONE `coll` from `sample_interior` and passes it to
+both `L_PDE` (Richards) and `L_PDE_mech`. `sample_interior` stratifies by
+material on shares 0.25 / 0.35 / 0.40, chosen because Mk_d is the unit that
+fails mechanically (sigma_ci 4.29 vs 17.9 MPa) and is only 9.7% of the domain
+by area. That is the right stratification for `L_PDE_mech`.
+
+It is close to the worst one for `L_PDE`. Measured
+(`scripts/inert_fraction.py`, `docs/inert_fraction_day27.json`): at a 0.1 m /
+30 d reach criterion, 94.7% of a 10,000-point production draw lands where
+neither capillary diffusion nor gravity drainage can move information at all,
+and the marls are the deadest part of it — their front advances 8-10 mm in the
+whole window. Oversampling Mk_d by 3.6x spends more of the budget there.
+
+`src/sampling_front.py` provides the hydraulic alternative: log-spaced bands in
+initial suction (z - Z_WT), which is the variable K*, C*, the diffusivity and
+the celerity are all monotone in, plus a 2 m surface band that elevation cannot
+see because the rain BC drives psi toward 0 at the ground surface whatever the
+elevation. Live fraction at the 0.1 m criterion goes 5.29% -> 37.93%. Against a
+400k-point uniform-in-area reference over 10 seeds, neither sampler is
+detectably biased but the front sampler's standard error on smooth integrands
+is 2.8x to 6.9x smaller.
+
+**NOT ADOPTED YET, and not wired into `train.py`.** Splitting the two losses
+onto separate point sets is a real change to what `total_loss` integrates, and
+it should wait on the ansatz decision recorded in `docs/open_items.md` (Day 27)
+— see D-Samp.2. Recorded here so the measurement is not repeated.
+
+### D-Samp.2 (Day 27) — the sampler does not fix the seed-variance problem, and residual-based refinement would make it worse
+
+Two negative results that must not be rediscovered.
+
+**The front sampler makes `w^[pde_richards]` worse, not better.** Draw-only
+spread at N = 1200 goes 469.9x -> 15989.5x
+(`docs/seed_variance_decoupled_front_day27.json`). The Day 26 note assumed the
+1264x spread came from the live band being under-sampled. It does not.
+`scripts/residual_tail.py` shows 2-3 collocation points out of 4000 carrying
+90% of `L_PDE_richards` under EITHER sampler, and every top contributor sitting
+at psi = -0.06 to -0.47 m where psi_0 should be -30 to -77 m. The cause is the
+ansatz: `NearPhysical.forward` is `psi* = psi0* + eps_psi * raw` off a bare
+`nn.Linear`, so at eps_psi = 0.3 between 15% and 35% of points initialise at
+psi >= 0 — saturated, in a domain that is unsaturated everywhere by
+construction (Z_WT = 197 m is 3 m below Z_BASE). The front sampler moves points
+to LOW suction, i.e. nearer the psi = 0 crossing, so it loads more mass onto
+the van Genuchten singularity. This is an ansatz decision, not a sampler one.
+
+**Residual-magnitude adaptive refinement (RAR/RAD) is the wrong criterion
+here.** In the inert zone |R| is the storage term and is LARGER than in the
+live band — on prod02, median 1.24e-03 against 1.12e-05. Refining on |R| would
+refine into the dead region. The inert points are trivially SATISFIABLE, not
+trivially satisfied; their residual is psi drifting in time where nothing
+should happen, which is the 150 m IC violation showing up in the PDE term. Any
+adaptive criterion must be the flux fraction
+`max(|diffusion|, |gravity|) / |storage|` — the same quantity that fixes
+`inspect_richards_terms.py`'s miscalibrated verdict labels, so the two items
+are one.
