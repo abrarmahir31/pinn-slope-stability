@@ -1,0 +1,96 @@
+{
+ "tag": "baseline-v1",
+ "frozen_utc": "2026-09-14T13:00:41",
+ "run_dir": "runs/ansatz/exp_seed7",
+ "checkpoint": "ckpt_final.pt",
+ "step": 2000,
+ "train_cfg": {
+  "layers": 8,
+  "width": 64,
+  "seed": 7,
+  "device": "cuda",
+  "n_pde": 10000,
+  "n_bc": 3000,
+  "n_iface": 500,
+  "t_max": 30.0,
+  "epochs": 2000,
+  "lr": 0.001,
+  "lr_schedule": "cosine",
+  "every": 25,
+  "lam": 0.3,
+  "warmup": 0,
+  "no_balance": false,
+  "log_every": 25,
+  "ckpt_every": 0,
+  "out": "runs\\ansatz\\exp_seed7",
+  "resume": null,
+  "no_feedback": false,
+  "eps_psi": 0.3,
+  "ansatz": "exp",
+  "cap_k": 100.0,
+  "seed_source": "formula"
+ },
+ "git": {
+  "commit": "96209a4e2c07e43e486a9c644d2dcbd2bf278e20",
+  "branch": "step-3.5-ansatz",
+  "dirty": true
+ },
+ "torch": "2.13.0+cu130",
+ "python": "3.10.21",
+ "overrides": [
+  "working tree is dirty; archived code would not match the run",
+  "baseline is already failing at SRF = 1 (19.25% below FS=1); an SSR sweep has nothing to reduce"
+ ],
+ "files": {
+  "run/ckpt_final.pt": {
+   "sha256": "0a193d83f3d87da53ac606742a952b041bcf27a0d94408f2314326180e67a53f",
+   "bytes": 734897,
+   "source": "runs/ansatz/exp_seed7/ckpt_final.pt"
+  },
+  "run/config.json": {
+   "sha256": "1f063cdef04bf044066171099f55105d68ef321e01dd8bf81ceff15a713955be",
+   "bytes": 485,
+   "source": "runs/ansatz/exp_seed7/config.json"
+  },
+  "run/log.jsonl": {
+   "sha256": "0054282cefedef34f5565219548ad568c85fb294a35d3f88a573f840f4e889de",
+   "bytes": 127427,
+   "source": "runs/ansatz/exp_seed7/log.jsonl"
+  },
+  "artifacts/fig4.png": {
+   "sha256": "0f0a5b5efe925b75ebcd691e6dc4b361edb72093c7fa2121e414779fb16de5f6",
+   "bytes": 143777,
+   "source": "docs/fig4.png"
+  },
+  "artifacts/fig5.png": {
+   "sha256": "12a3045aef7a90d39fd103f24dfc2068dd7ab596a79a96d3fc87c594eefb9030",
+   "bytes": 330537,
+   "source": "docs/fig5.png"
+  },
+  "artifacts/fig6.png": {
+   "sha256": "4c9f4cafd9390c3cc1006a98a62935368b7cc7303236ae31e280f79cf990f0da",
+   "bytes": 87238,
+   "source": "docs/fig6.png"
+  },
+  "artifacts/fig7.png": {
+   "sha256": "020a0ba05dbb4d46e20c4b05c2a2c489248636b2692ae39191bdf9bc7d17888e",
+   "bytes": 143054,
+   "source": "docs/fig7.png"
+  },
+  "artifacts/fig6_elastic_check.json": {
+   "sha256": "4753377e05fff2152c384fb5199cdb9bfc76b5907edb274615d01a81e382417d",
+   "bytes": 1196,
+   "source": "docs/fig6_elastic_check.json"
+  },
+  "artifacts/verify_nguyen_raudkivi.json": {
+   "sha256": "71492e06fd60d82511b66ec8c36058efe99c1d186a1a4c5ab4375d226d58fd30",
+   "bytes": 7178,
+   "source": "docs/verify_nguyen_raudkivi.json"
+  },
+  "artifacts/DECISIONS.md": {
+   "sha256": "cc9b6cbfa19da64d4f22221da3909353342d39896cce6e3b82302f9bce3071ba",
+   "bytes": 31640,
+   "source": "DECISIONS.md"
+  }
+ }
+}

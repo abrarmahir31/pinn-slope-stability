@@ -94,6 +94,11 @@ def main(argv=None):
     ap.add_argument("--eps-psi", type=float, default=None)
     ap.add_argument("--out", default="docs/fig6.png")
     ap.add_argument("--json", default="docs/fig6_elastic_check.json")
+    ap.add_argument("--no-bishop", action="store_true",
+                    help="evaluate FS on sigma_0 + D:eps WITHOUT the Bishop "
+                         "pore term. Diagnostic: separates 'the equilibrated "
+                         "baseline stress is already at failure' from 'the "
+                         "psi drift pushed it over'. Run both and compare.")
     ap.add_argument("--dpi", type=int, default=200)
     a = ap.parse_args(argv)
 
@@ -105,7 +110,8 @@ def main(argv=None):
     net.eval()
     print(f"checkpoint: {a.ckpt}   step: {d.get('step')}")
     print(f"ansatz:     {net.summary()}")
-    print(f"t = {a.t:g} d,  SRF = 1 (no strength reduction applied)\n")
+    print(f"t = {a.t:g} d,  SRF = 1 (no strength reduction applied)"
+          + ("   [BISHOP OFF -- diagnostic]" if a.no_bishop else "") + "\n")
 
     coll = sample_interior(a.n, a.sampling_seed)
     coll = attach_sigma0(coll)
@@ -132,7 +138,8 @@ def main(argv=None):
         # same unpacking loss.L_BC_mech does at loss.py:399.
         (sxx, szz, sxz), _chi, _eps = total_stress_star(
             lambda X_, Z_, T_: net(X_, Z_, T_), x, z, t, mats[tag],
-            sigma0_star=(s0[:, 0:1], s0[:, 1:2], s0[:, 2:3]))
+            sigma0_star=(s0[:, 0:1], s0[:, 1:2], s0[:, 2:3]),
+            bishop=not a.no_bishop)
         sxx = sxx.detach().numpy().ravel() * sig_ref
         szz = szz.detach().numpy().ravel() * sig_ref
         sxz = sxz.detach().numpy().ravel() * sig_ref
@@ -225,7 +232,7 @@ def main(argv=None):
     if a.json:
         with open(a.json, "w") as f:
             json.dump({"ckpt": a.ckpt, "step": d.get("step"), "t_days": a.t,
-                       "n": a.n, "srf": 1.0,
+                       "n": a.n, "srf": 1.0, "bishop": not a.no_bishop,
                        "frac_yielded_domain": frac_all,
                        "per_unit": rows}, f, indent=1)
         print(f"wrote {a.json}")
