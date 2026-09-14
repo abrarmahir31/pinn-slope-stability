@@ -29,5 +29,14 @@ for tag in ["Mk", "Mk_d", "Tm"]:
     print()
 
 e = torch.tensor([1e-2], dtype=torch.float64)
-f = float(kozeny_carman_factor(mats["Mk"].n0, e, KC_DEFAULT, tag="XX"))
-print(f"unknown tag 'XX' -> {f:.12f}  ({'fails OPEN' if f != 1.0 else 'fails closed'})")
+try:
+    f = float(kozeny_carman_factor(mats["Mk"].n0, e, KC_DEFAULT, tag="XX"))
+except KeyError as exc:
+    print(f"unknown tag 'XX' -> KeyError (fails CLOSED, loudly)\n  {exc}")
+else:
+    raise AssertionError(
+        f"KCConfig.is_on accepted an unknown stratum tag and returned {f:.12f}. "
+        "is_on is supposed to raise on tags it does not know -- a silent "
+        "fall-through would apply the global setting to a stratum nobody "
+        "decided about, which is how Tm's per_unit exclusion gets lost."
+    )

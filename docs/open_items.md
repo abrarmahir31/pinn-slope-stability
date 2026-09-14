@@ -605,3 +605,8 @@ of the domain cannot mean anything.
 `src/sampling_front.py` is NOT wired into `scripts/train.py` -- `L_PDE` and
 `L_PDE_mech` still share one `coll` (train.py:92), and splitting them is a
 separate change that should wait on the ansatz decision.
+
+### Float32 Initialization Stability
+*   **Observation**: Network initialization under `float32` yields draw-dependent NaNs in the `Tm` stratum (exposed by initialization differences across Torch versions). 
+*   **Hypothesis**: The clamp at `vg.py:84` (`s.clamp(eps, 1.0 - eps)` with `eps = 1e-12`) silently evaluates to exactly `1.0` in `float32`. Combined with `Tm`'s placeholder parameters and `s ** (1.0 / m)` at small `m`, this creates paths to `inf/inf` or `0 * inf`.
+*   **Impact**: Solidifies the `float64` requirement as a stability necessity, not just a precision preference.

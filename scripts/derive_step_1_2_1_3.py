@@ -2,9 +2,12 @@
 Step 1.2-1.3: SWCC (van Genuchten) + elastic parameters for Isikdere strata.
 Source data: Ulusay et al. (2014), Eng. Geol. 181, 261-280, Tables 2 & site GSI/UCS.
 """
-import json, math
+import json, math, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from paths import DATA
 import numpy as np
-from rosetta import rosetta
+from rosetta import rosetta, SoilData
 
 G = 9.81  # m/s^2, consistent with Step 1.1 sheet
 
@@ -29,8 +32,14 @@ print("=" * 78)
 
 def run_rosetta(rows, version=3):
     """rows: [sand, silt, clay, (bd)]; estimate_type='log' -> cols 2-5 are log10 means.
-    Cols: 0 theta_r, 1 theta_s, 2 log10 alpha(1/cm), 3 log10 n, 4 log10 Ksat(cm/day)"""
-    sed -n '1,10p;30,40p' derive_step_1_2_1_3.py
+    Cols: 0 theta_r, 1 theta_s, 2 log10 alpha(1/cm), 3 log10 n, 4 log10 Ksat(cm/day)
+
+    Rosetta picks its own model from the column count of `rows`: 3 columns
+    (sand/silt/clay) selects model 2, 4 columns (+ bulk density) selects model
+    3. That is why `codes` is reported alongside the means -- it is the record
+    of WHICH pedotransfer model produced the number, and it is not something
+    this function chooses."""
+    mean, stdev, codes = rosetta(version, SoilData.from_array(rows))
     return mean, stdev, codes
 
 results = {}
@@ -163,5 +172,5 @@ for name, p in soils_E.items():
           f"   G = {Gm:.2e} Pa  lambda = {lam:.2e} Pa")
 
 json.dump(dict(step12=results, rock_porosity=rock_poro, step13=elastic),
-          open("../data/derived_raw.json", "w"), indent=1, default=float)
-print("\nSaved ../data/derived_raw.json")
+          open(DATA / "derived_raw.json", "w"), indent=1, default=float)
+print(f"\nSaved {DATA / 'derived_raw.json'}")

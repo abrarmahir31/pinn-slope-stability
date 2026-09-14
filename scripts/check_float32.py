@@ -34,15 +34,20 @@ def residual_for(dtype):
                               s=SCALES, normalise="none",
                               k_factor=_kc_factor(n, xs, zs, ts, mats[tag],
                                                   KC_DEFAULT, tag, SCALES))
-        out[tag] = R.detach().double()
+        out[tag] = (R.detach().double(), R.dtype)
     return out
 
 r64 = residual_for(torch.float64)
 r32 = residual_for(torch.float32)
 
 for tag in r64:
-    a, b = r64[tag], r32[tag]
-    print(f"{tag:>5}  dtype32={b.dtype}  n={a.numel()}")   # sanity: must be from float32 path
+    (a, dt64), (b, dt32) = r64[tag], r32[tag]
+    # This guard is the whole point of the script: if the float32 arm silently
+    # ran in float64 the comparison below is a comparison of a number with
+    # itself, and it would report "float32 is fine" for every stratum.
+    assert dt32 == torch.float32, f"{tag}: float32 arm computed in {dt32}"
+    assert dt64 == torch.float64, f"{tag}: float64 arm computed in {dt64}"
+    print(f"{tag:>5}  computed in {dt32} vs {dt64}  n={a.numel()}")
     rel = (a - b).abs() / (a.abs() + 1e-300)
     print(f"        median rel err {rel.median():.3e}   max {rel.max():.3e}")
     print(f"        |R| median 64 {a.abs().median():.3e}   32 {b.abs().median():.3e}")
