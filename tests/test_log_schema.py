@@ -6,6 +6,12 @@ This pins the key set so it cannot happen to the frozen baseline.
 log_c_raw and grad_norms carry only the currently-active terms, so their
 membership legitimately shifts when a term freezes or un-freezes. Their
 presence is asserted, their contents are not.
+
+Day 27 added psi_sat_frac / psi_max_m / psi_p50_m. Section 5 is unsaturated
+everywhere (Z_WT = 197 m sits below Z_BASE = 200 m), so psi_sat_frac should be
+0 and is 0.118 -> 0.343 over the first twenty steps at 8x64 under the unbounded
+ansatz. It is the quantity D-A.1 turns on, so it is logged rather than
+re-measured from checkpoints.
 """
 import json
 import pathlib

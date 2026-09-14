@@ -12,6 +12,12 @@ train.py -- Step 4.1 training loop with the Step 3.4 adaptive weighting.
     PYTHONPATH=. python scripts/train.py --resume runs/smoke/ckpt_001000.pt \
         --epochs 4000 --out runs/smoke
 
+    # Adam then L-BFGS polish (Step 4.1b). Weights freeze at the handover;
+    # see _lbfgs_phase. ckpt_adam_final.pt is written there regardless of
+    # --ckpt-every, so the pre-polish field stays recoverable.
+    PYTHONPATH=. python scripts/train.py --layers 8 --n-pde 10000 \
+        --epochs 2000 --lbfgs-epochs 200 --device cuda --out runs/polish
+
 HOW TO READ THE LOG -- the one thing that will mislead you
 -----------------------------------------------------------
 NOT the weighted total. It STEPS at every weight update. That is arithmetic,
@@ -21,6 +27,19 @@ smooth decrease will conclude the run is broken when it is not.
 
 Read the per-term UNWEIGHTED losses. Those are printed as ratios to their own
 step-0 value (the columns) and stored raw in log.jsonl under "L".
+
+Records carry "phase": "adam" or "lbfgs". L-BFGS rows are prefixed `L ` in the
+console. In the L-BFGS phase "spread" and "grad_norms" are NULL rather than
+repeated -- the balancer is frozen there, so echoing its last measurement would
+draw a flat line that looks measured and is a stale cache.
+
+A FOURTH SIGNAL, added Day 27, and it is the one that would have caught the
+failure the other three missed: "psi_sat_frac" and "psi_max_m". Section 5 is
+unsaturated everywhere (Z_WT = 197 m sits below Z_BASE = 200 m), so psi >= 0 is
+unphysical, and a psi_max of -20 m or drier under a 30-day rain BC means the
+field has left the live band and the Richards residual is being satisfied
+structurally rather than solved. A 2000-epoch run can pass all three signals
+above while doing exactly that.
 
 Three health signals, all in log.jsonl:
   * each L_i trending down. In the 16 Aug toy run at 2x64 every term
@@ -67,6 +86,7 @@ from src.materials import load_materials
 from src.model import PINN, NearPhysical
 from src.sampling import (sample_boundary, sample_interfaces, sample_interior,
                           to_device)
+from src.nondim import SCALES
 from src.sigma0 import attach_sigma0
 from src.weighting import (PI_SEED_8X64, PI_SEED_8X64_T0,
                            BalancerConfig, LossBalancer, TERMS)
@@ -86,7 +106,8 @@ def setup(a):
     """
     cfg = dataclasses.replace(tiny(), n_layers=a.layers, n_neurons=a.width,
                               seed=a.seed, device=a.device)
-    net = NearPhysical(PINN(cfg, BOUNDS), eps_psi=a.eps_psi)
+    net = NearPhysical(PINN(cfg, BOUNDS), eps_psi=a.eps_psi,
+                       mode=a.ansatz, cap_k=a.cap_k)
     dev = net.device
 
     coll = sample_interior(a.n_pde, a.seed)
@@ -152,11 +173,40 @@ def parse(argv=None):
     g.add_argument("--no-feedback", action="store_true",
                    help="Kozeny-Carman porosity-strain feedback OFF. The "
                         "one-way arm of the Step 6.2 ablation (Day 51).")
+    g = ap.add_argument_group("L-BFGS polish (Step 4.1b)")
+    g.add_argument("--lbfgs-epochs", type=int, default=0,
+                   help="L-BFGS iterations AFTER the Adam phase. 0 (default) "
+                        "= Adam only, which is every run before Day 27. "
+                        "Each iteration costs up to --lbfgs-max-eval closure "
+                        "evaluations, so 200 L-BFGS steps can cost as much as "
+                        "4000 Adam steps.")
+    g.add_argument("--lbfgs-lr", type=float, default=1.0,
+                   help="L-BFGS step scale. 1.0 with strong_wolfe, which "
+                        "chooses the step itself; lower only if the line "
+                        "search reports failures.")
+    g.add_argument("--lbfgs-history", type=int, default=50)
+    g.add_argument("--lbfgs-max-eval", type=int, default=25,
+                   help="closure evaluations per iteration (line search cap)")
+
     g = ap.add_argument_group("ansatz (NearPhysical)")
     g.add_argument("--eps-psi", type=float, default=0.3,
                    help="NearPhysical psi perturbation scale. 3e-3 (the "
                         "pre-Day-25 value) caps psi excursion at 0.5 m of "
                         "head, which contradicts the Tm rain flux BC.")
+    g.add_argument("--ansatz", choices=("unbounded", "cap", "exp"),
+                   default="unbounded",
+                   help="how psi is held unsaturated. DEFAULT unbounded = the "
+                        "shipped behaviour. At eps_psi = 0.3 that puts 15-35%% "
+                        "of collocation points at psi >= 0 on an untrained "
+                        "net, in a domain that is unsaturated everywhere by "
+                        "construction. cap/exp remove that; which to adopt is "
+                        "OPEN -- see DECISIONS.md D-A.1 and "
+                        "scripts/ansatz_ablation.py.")
+    g.add_argument("--cap-k", type=float, default=100.0,
+                   help="sharpness of --ansatz cap. Larger = sharper = less "
+                        "IC distortion but less of the spread fixed. k=20 "
+                        "distorts psi_0 = -3 m by 145%% and is unusable; "
+                        "k=1000 leaves the spread at 100x.")
     g.add_argument("--seed-source", choices=("formula", "t0", "geomean"),
                    default="formula",
                    help="which D-W.7 seed to start the balancer from, at "
@@ -245,39 +295,27 @@ def main(argv=None) -> int:
         n_done += 1
                   
         if step % a.log_every == 0:
-            raw = {k: float(v.detach()) for k, v in L.items()}
-            g = bal._last_norms
-            live = [bal.w[k] * g[k] for k in TERMS
-                    if k not in bal._frozen and g.get(k, 0.0) > 0]
-            sec = (time.time() - t0) / max(n_done, 1)
-            rec = {"step": step, "total": float(total.detach()), "L": raw,
-                   "L0": L0, "w": dict(bal.w), "c": dict(bal.c),
-                   "grad_norms": dict(g),
-                   "spread": (max(live) / min(live)) if len(live) > 1 else None,
-                   "clipped": sorted(bal._clipped),
-                   "log_c_raw": dict(bal._log_c_raw),
-                   "frozen": sorted(bal._frozen),
-                   "lr": lr_now,
-                   "sec_per_epoch": sec}
-                
-            log.write(json.dumps(rec) + "\n")
-            log.flush()
-            sp = rec["spread"]
-            print(f"{step:6d}  " + "  ".join(
-                f"{k}={raw[k] / L0[k]:.3g}" for k in
-                ("bc_mech", "pde_mech", "pde_richards", "bc",
-                 "ic_head", "ic_disp"))
-                + f"   spread={sp:.3g}" if sp else ""
-                + f"   {sec:.3f}s/ep")
+            _write_log(log, step, "adam", total, L, L0, bal, net, coll,
+                       lr_now, (time.time() - t0) / max(n_done, 1))
 
         if a.ckpt_every and step and step % a.ckpt_every == 0:
             _atomic_save({"net": net.state_dict(), "opt": opt.state_dict(),
                         "bal": bal.state_dict(), "step": step, "L0": L0,
                         "cfg": vars(a)}, f"{a.out}/ckpt_{step:06d}.pt")
 
+    # A checkpoint at the handover, ALWAYS, independent of --ckpt-every. Fig. 4
+    # marks this step, and the Adam-only field has to remain recoverable: if
+    # the polish makes things worse, the comparison is against this file.
     _atomic_save({"net": net.state_dict(), "opt": opt.state_dict(),
-                "bal": bal.state_dict(), "step": a.epochs, "L0": L0,
-                "cfg": vars(a)}, f"{a.out}/ckpt_final.pt")
+                  "bal": bal.state_dict(), "step": a.epochs, "L0": L0,
+                  "cfg": vars(a)}, f"{a.out}/ckpt_adam_final.pt")
+
+    if a.lbfgs_epochs > 0:
+        n_done += _lbfgs_phase(a, net, bal, loss_fn, coll, L0, log, t0, n_done)
+
+    _atomic_save({"net": net.state_dict(), "opt": opt.state_dict(),
+                "bal": bal.state_dict(), "step": a.epochs + a.lbfgs_epochs,
+                "L0": L0, "cfg": vars(a)}, f"{a.out}/ckpt_final.pt")
     log.close()
 
     print()
@@ -292,6 +330,135 @@ def main(argv=None) -> int:
         print("Peak is during bal.update() -- seven autograd.grad calls with "
               "retain_graph=True. Raise --every before cutting --n-pde.")
     return 0
+
+def _lbfgs_phase(a, net, bal, loss_fn, coll, L0, log, t0, n_done):
+    """Second-order polish after Adam. Returns the number of iterations run.
+
+    WEIGHTS ARE FROZEN AT HANDOVER, and this is a correctness requirement
+    rather than a tuning choice. L-BFGS builds its inverse-Hessian estimate
+    from (s, y) pairs -- parameter and GRADIENT differences across iterations --
+    and the strong-Wolfe line search compares objective values across several
+    evaluations within a single iteration. If `bal.w` changed underneath, the
+    curvature pairs would come from different objectives and the line search
+    would compare values of different functions. Both are silent failures: the
+    run would not error, it would just descend on nothing in particular. So the
+    balancer is not stepped here, and `bal.total` is evaluated with whatever
+    weights the Adam phase ended on.
+
+    The consequence is worth stating in Methodology: the polished field is the
+    minimiser of a FIXED weighted objective, the one GradNorm arrived at by
+    step `--epochs`. It is not the minimiser of the adaptively-weighted
+    problem, because that problem has no fixed objective to minimise.
+
+    A WARNING ABOUT THE CURRENT STATE OF THE MODEL. As of Day 27 a 2000-epoch
+    Adam run ends with `w[pde_richards]` around 8.3e+03 on a term whose loss is
+    pinned at 1e-05 of its start -- not because it is solved but because the
+    field has drifted to ~163 m of suction where every flux term underflows
+    (`docs/open_items.md`, Day 27; `activity_floor` cannot distinguish the two
+    cases). Freezing those weights and applying a second-order method drives
+    the field further into that regime, faster and more precisely. Convergence
+    will look excellent. Check `psi_max_m` and `bc` in the log before believing
+    any of it.
+    """
+    dev_pin = list(net.parameters())
+    opt = torch.optim.LBFGS(dev_pin, lr=a.lbfgs_lr,
+                            max_iter=1, max_eval=a.lbfgs_max_eval,
+                            history_size=a.lbfgs_history,
+                            tolerance_grad=0, tolerance_change=0,
+                            line_search_fn="strong_wolfe")
+
+    frozen_w = dict(bal.w)
+    print(f"\n--- L-BFGS handover at step {a.epochs} "
+          f"({a.lbfgs_epochs} iterations, weights frozen) ---")
+    print("  w = " + "  ".join(f"{k}={v:.4g}" for k, v in
+                               sorted(frozen_w.items())))
+
+    state = {"L": None, "total": None, "nfev": 0}
+
+    def closure():
+        opt.zero_grad()
+        L = losses_at(net, loss_fn, coll, feedback=not a.no_feedback)
+        total = bal.total(L)          # frozen weights; bal is never stepped
+        total.backward()
+        state["L"], state["total"] = L, total
+        state["nfev"] += 1
+        return total
+
+    done = 0
+    for it in range(1, a.lbfgs_epochs + 1):
+        step = a.epochs + it
+        opt.step(closure)
+        done += 1
+        if state["L"] is None:        # line search made no evaluation at all
+            print(f"L {step:6d}  line search produced no evaluation; stopping")
+            break
+        if it % a.log_every == 0 or it == a.lbfgs_epochs:
+            _write_log(log, step, "lbfgs", state["total"], state["L"], L0,
+                       bal, net, coll, a.lbfgs_lr,
+                       (time.time() - t0) / max(n_done + done, 1))
+        if not torch.isfinite(state["total"]):
+            print(f"L {step:6d}  total is not finite; stopping")
+            break
+
+    print(f"\n  {state['nfev']} closure evaluations over {done} L-BFGS "
+          f"iterations ({state['nfev'] / max(done, 1):.1f} per iteration; "
+          f"the cap is --lbfgs-max-eval {a.lbfgs_max_eval})")
+    return done
+
+
+def _write_log(log, step, phase, total, L, L0, bal, net, coll, lr_now, sec):
+    """One log record, shared by the Adam and L-BFGS phases.
+
+    Factored out so the two phases cannot drift into different schemas --
+    `tests/test_log_schema.py` pins the key set, and a second inline copy is
+    exactly how the `clipped` field went missing once before.
+    """
+    raw = {k: float(v.detach()) for k, v in L.items()}
+
+    # `spread` and `grad_norms` are only meaningful while the balancer is
+    # being stepped. In the L-BFGS phase the weights are frozen and
+    # bal._last_norms still holds whatever the final Adam update measured, so
+    # reporting them would draw a flat line in Fig. 4 that looks like a
+    # measurement and is a stale cache. Emit nulls instead.
+    if phase == "adam":
+        g = bal._last_norms
+        live = [bal.w[k] * g[k] for k in TERMS
+                if k not in bal._frozen and g.get(k, 0.0) > 0]
+    else:
+        g, live = {}, []
+
+    # Day 27: the quantity the ansatz decision turns on. Section 5 is
+    # unsaturated everywhere (Z_WT = 197 m is below Z_BASE = 200 m), so any
+    # psi >= 0 is unphysical, and it is where van Genuchten K_r goes
+    # near-singular and the Richards gradient becomes untrustable. Cheap: one
+    # forward pass on the existing interior set, no grad.
+    with torch.no_grad():
+        _psi = net(coll.x, coll.z, coll.t)[:, 0:1] * SCALES.H_ref
+
+    rec = {"step": step, "phase": phase, "total": float(total.detach()),
+           "L": raw,
+           "psi_sat_frac": float((_psi >= 0).double().mean()),
+           "psi_max_m": float(_psi.max()),
+           "psi_p50_m": float(_psi.median()),
+           "L0": L0, "w": dict(bal.w), "c": dict(bal.c),
+           "grad_norms": dict(g),
+           "spread": (max(live) / min(live)) if len(live) > 1 else None,
+           "clipped": sorted(bal._clipped),
+           "log_c_raw": dict(bal._log_c_raw),
+           "frozen": sorted(bal._frozen),
+           "lr": lr_now,
+           "sec_per_epoch": sec}
+    log.write(json.dumps(rec) + "\n")
+    log.flush()
+
+    sp = rec["spread"]
+    tag = "" if phase == "adam" else "L "
+    print(f"{tag}{step:6d}  " + "  ".join(
+        f"{k}={raw[k] / L0[k]:.3g}" for k in
+        ("bc_mech", "pde_mech", "pde_richards", "bc", "ic_head", "ic_disp"))
+        + (f"   spread={sp:.3g}" if sp else "")
+        + f"   {sec:.3f}s/ep")
+
 
 def lr_factor(step, total, warm=0.10, decay_end=0.50, floor=0.10):
     """Multiplier on base lr. Roadmap Step 4.1 schedule as fractions of run
