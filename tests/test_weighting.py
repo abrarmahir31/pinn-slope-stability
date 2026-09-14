@@ -564,3 +564,83 @@ def test_the_measured_pde_seeds_are_not_reproducible_across_draws():
     # ic_disp's 4.7e+04 is therefore a real requirement, not a sampling
     # artifact -- which is why it needs the anchor decision and not a seed.
     assert spread["ic_disp"] < 5
+
+
+# ---------------------------------------------------------------------------
+# D-W.8 -- the regime gate (Day 28). `regime_floor = 0.0` is OFF by default,
+# so every test above this line describes behaviour that must not change.
+# ---------------------------------------------------------------------------
+def _bal(**kw):
+    net = torch.nn.Linear(2, 1)
+    cfg = BalancerConfig(anchor="bc_mech", warmup=0, every=1, **kw)
+    return LossBalancer(["bc_mech", "pde_richards", "ic_disp"],
+                        net.parameters(), cfg), net
+
+
+def _losses(net, scale):
+    x = torch.ones(4, 2)
+    return {k: (net(x) * v).pow(2).mean()
+            for k, v in zip(("bc_mech", "pde_richards", "ic_disp"), scale)}
+
+
+def test_the_regime_gate_is_off_by_default():
+    assert BalancerConfig().regime_floor == 0.0
+
+
+def test_an_activity_argument_is_ignored_while_the_gate_is_off():
+    bal, net = _bal()
+    bal.update(_losses(net, (1.0, 1.0, 1.0)), activity={"pde_richards": 0.0})
+    assert "pde_richards" not in bal._frozen
+
+
+def test_a_degenerate_term_freezes_even_with_a_large_gradient():
+    """The whole point. `pde_richards` carries a larger gradient than
+    `ic_disp` in 81 of 81 logged updates, so no magnitude floor can freeze
+    the first without freezing the second."""
+    bal, net = _bal(regime_floor=0.05)
+    bal.update(_losses(net, (1.0, 1.0, 1.0)), activity={"pde_richards": 1e-3})
+    assert "pde_richards" in bal._frozen
+    assert "ic_disp" not in bal._frozen
+
+
+def test_a_term_absent_from_activity_is_assumed_active():
+    """Six of the seven terms have no flux fraction; they must not be frozen
+    by omission."""
+    bal, net = _bal(regime_floor=0.05)
+    bal.update(_losses(net, (1.0, 1.0, 1.0)), activity={"pde_richards": 1.0})
+    assert bal._frozen == set()
+
+
+def test_a_frozen_term_rejoins_when_its_regime_recovers():
+    """D-W.4's rejoin property has to survive the second gate."""
+    bal, net = _bal(regime_floor=0.05)
+    bal.update(_losses(net, (1.0, 1.0, 1.0)), activity={"pde_richards": 1e-3})
+    assert "pde_richards" in bal._frozen
+    bal.update(_losses(net, (1.0, 1.0, 1.0)), activity={"pde_richards": 0.5})
+    assert "pde_richards" not in bal._frozen
+
+
+def test_a_frozen_term_holds_its_weight_rather_than_being_zeroed():
+    bal, net = _bal(regime_floor=0.05)
+    bal.update(_losses(net, (1.0, 1.0, 1.0)), activity={"pde_richards": 1.0})
+    held = bal.w["pde_richards"]
+    bal.update(_losses(net, (1.0, 1.0, 1.0)), activity={"pde_richards": 1e-9})
+    assert bal.w["pde_richards"] == held
+
+
+def test_freezing_the_anchor_by_regime_is_refused_not_silent():
+    """target='anchor' with a frozen anchor is a degenerate state, and the
+    existing code raises rather than inventing a target. Pinned so the new
+    gate cannot open a silent path into it."""
+    bal, net = _bal(regime_floor=0.05)
+    with pytest.raises(RuntimeError, match="anchor"):
+        bal.update(_losses(net, (1.0, 1.0, 1.0)),
+                   activity={"bc_mech": 0.0, "pde_richards": 1.0,
+                             "ic_disp": 1.0})
+
+
+def test_maybe_update_forwards_activity_on_cadence():
+    bal, net = _bal(regime_floor=0.05)
+    bal.maybe_update(0, _losses(net, (1.0, 1.0, 1.0)),
+                     activity={"pde_richards": 1e-3})
+    assert "pde_richards" in bal._frozen

@@ -280,6 +280,123 @@ def richards_residual_expanded(fields, x: Tensor, z: Tensor, t: Tensor, mat,
 
     return richards_residual_nd(C, dpsi_dt, div_Kgrad, dK_dz, s)
 
+def flux_fraction(terms: dict) -> Tensor:
+    r"""Pointwise regime signal for the Richards equation.
+
+        p = max(|diffusion|, |gravity|) / (|storage| + |diffusion| + |gravity|)
+
+    Takes the dict `richards_residual(..., return_terms=True)` returns.
+    Bounded in [0, 1] by construction:
+
+        p -> 0      both fluxes have collapsed; the equation has degenerated
+                    to C* dpsi*/dt* = 0 and its residual is trivially
+                    SATISFIABLE rather than satisfied.
+        p ~ 0.5     storage balanced against one flux -- what a solved
+                    transient Richards equation looks like.
+        p -> 1      storage has vanished; the state is quasi-steady, or (at
+                    psi >= 0 under the `unbounded` ansatz) unphysical.
+
+    WHY THIS EXISTS. `weighting.activity_floor` gates on gradient-norm
+    MAGNITUDE, which cannot separate "small because solved" from "small
+    because inert". Measured on `log.jsonl`, `pde_richards` carries a LARGER
+    gradient than `ic_disp` in 81 of 81 balancer updates, so any floor high
+    enough to freeze the first freezes the second -- and `ic_disp`'s 4.71e+04
+    is a real requirement (D-W.2). No constant separates them; the signal has
+    to be regime-aware rather than magnitude-aware.
+
+    THREE THINGS THAT MAKE THIS EASY TO MISREAD.
+
+    1. NO GLOBAL THRESHOLD EXISTS. The attainable ceiling on p is a MATERIAL
+       property and differs by 3.3 orders across Section 5 -- 4.03e-04 (Mk)
+       and 4.92e-04 (Mk_d) against 9.12e-01 (Tm), recomputed by
+       tests/test_flux_fraction.py from properties.py and nondim.py. The
+       marls cannot reach 0.05 at ANY saturation, so a rule of the form
+       "freeze when p < 0.05" is an unconditional disable of `pde_richards`
+       in 12.7% of the domain, not a regime rule. Normalise per material or
+       scope the rule to Tm, and record which.
+
+    2. AGGREGATE FIRST AND YOU LOSE THE DISTRIBUTION. p built from the
+       per-stratum medians of the three terms tracks the median of p closely
+       -- 1.0x to 1.9x on a matched field, so the MEDIANS are not the
+       problem. What the aggregate cannot express is the spread, and the
+       spread is the whole signal: two fields with identical per-term medians
+       can differ by 40 percentage points in the fraction of live points
+       (tests/test_flux_fraction.py). A term is frozen on how much of the
+       domain has degenerated, not on a central value. Hence a tensor, not a
+       float.
+
+    3. UNDER `unbounded` IT READS 1.000 ON THE BROKEN POINTS, EXACTLY. Not
+       approximately: van Genuchten C* is identically zero at psi = 0, so the
+       storage term VANISHES at a saturated point and p = max(d,g)/(d+g) = 1
+       by construction. Measured, 36.9% of Tm at t = 30 (seed 7, unbounded)
+       is at psi >= 0, reading p = 1.000, while the physical psi < 0 points
+       sit at 2.48e-05 -- a factor of 4e4 apart. Worse than a bad number: the
+       equation has changed TYPE there, from a transient balance to a
+       steady-state flux one, so those points are not Richards at all. The
+       signal is only meaningful once psi <= 0 is enforced, i.e. after D-A.1
+       selects `cap` or `exp`. Do not calibrate a threshold on an `unbounded`
+       run.
+
+    REDUCE WITH A FRACTION, NOT A QUANTILE. `frac(p > p_ref)` is bounded and
+    cannot be dragged by a handful of extreme points; a percentile can. Across
+    five collocation draws on a fixed network the spread is 1.04x for
+    `frac(p > 1e-6)` against 2.54x for p99. Feeding a tail-sensitive statistic
+    into the freeze rule would rebuild the Day-26 seed-variance bug one layer
+    up.
+
+    Detached: this is a diagnostic and must never enter the graph.
+    """
+    missing = {"storage", "diffusion", "gravity"} - set(terms)
+    if missing:
+        raise KeyError(
+            f"flux_fraction: terms dict is missing {sorted(missing)}. "
+            "Call richards_residual(..., return_terms=True).")
+    s = terms["storage"].detach().abs()
+    d = terms["diffusion"].detach().abs()
+    g = terms["gravity"].detach().abs()
+    den = s + d + g
+    num = torch.maximum(d, g)
+    # 0/0 at a point where all three vanish identically: no regime information,
+    # report 0 (inert) rather than NaN, which would poison any reduction.
+    return torch.where(den > 0, num / den, torch.zeros_like(den)).reshape(-1)
+
+
+#: psi values (m) of the D-S.4 sweep. Mirrored by scripts/ds4_term_scales.py;
+#: the two must agree or the ceiling table and D-S.4 REVISED are describing
+#: different sweeps.
+PSI_SWEEP_M = (-0.01, -0.1, -1.0, -3.0, -10.0, -30.0, -80.0, -161.0)
+
+
+def attainable_flux_fraction(mat, s: Scales = SCALES, psi_m=PSI_SWEEP_M) -> float:
+    """The largest `flux_fraction` this MATERIAL can reach, over the D-S.4
+    psi sweep. A property of the van Genuchten parameters, not of any network
+    or training state.
+
+    This is the reference a regime rule has to be written against. Measured on
+    Section 5: 4.027e-04 (Mk), 4.922e-04 (Mk_d), 9.118e-01 (Tm). The marls are
+    three orders below any threshold a person would write down, so an absolute
+    cut on p is an unconditional disable of `pde_richards` in 12.7% of the
+    domain -- at any saturation, however well the network is solving. Divide
+    by this before comparing across strata, or scope the rule to Tm and record
+    that as a decision.
+
+    Recomputed rather than tabulated, so a parameter drift in properties.py
+    surfaces as a changed ceiling rather than as a stale constant.
+    """
+    swcc = swcc_from_material(mat, s)
+    best = 0.0
+    for p_m in psi_m:
+        ps = torch.tensor([p_m / s.H_ref], dtype=torch.float64,
+                          requires_grad=True)
+        K = swcc.K_star(ps)
+        C = swcc.C_star(ps)
+        dK, = torch.autograd.grad(K.sum(), ps)
+        D = (s.Pi_R_diff * K / C).item()
+        G = (s.Pi_R_grav * dK / C).abs().item()
+        best = max(best, max(D, G) / (1.0 + D + G))
+    return best
+
+
 def darcy_flux(fields, x, z, t, mat, s: Scales = SCALES):
     """Dimensionless Darcy flux (q*_x, q*_z) at the given points.
 

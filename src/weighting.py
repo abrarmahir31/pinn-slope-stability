@@ -585,6 +585,7 @@ class BalancerConfig:
     alpha: float = 0.0               # GradNorm rate exponent; 0 = off (D-W.1)
     log_clip: Tuple[float, float] = (-3.0, 3.0)     # log10 bounds on c, D-W.3
     activity_floor: float = 1e-12    # relative to the largest grad norm
+    regime_floor: float = 0.0        # D-W.8; 0.0 = OFF, magnitude only
     warmup: int = 500                # steps before the first update
     seed: Optional[Mapping[str, float]] = None      # w0; None -> PI_SEED
 
@@ -643,13 +644,53 @@ class LossBalancer:
         return {k: self.w0[k] * self.c[k] for k in self.terms}
 
     # -- internals ---------------------------------------------------------
-    def _active(self, norms: Mapping[str, float]) -> Dict[str, float]:
-        """Terms carrying a usable gradient. D-W.4."""
+    def _active(self, norms: Mapping[str, float],
+                activity: Optional[Mapping[str, float]] = None
+                ) -> Dict[str, float]:
+        """Terms carrying a usable gradient. D-W.4, extended by D-W.8.
+
+        TWO independent gates, because there are two ways for a term to be
+        unusable and they need different signals:
+
+          MAGNITUDE (`activity_floor`) -- the term is unexercised. `interface`
+            at 1.2e-32 is the case: flux continuity is satisfied exactly and
+            there is nothing there yet. Kept as-is.
+
+          REGIME (`regime_floor`) -- the term is exercised but its equation
+            has DEGENERATED. `pde_richards` under a collapsed field is the
+            case: Richards has reduced to C* dpsi*/dt* = 0, the residual is
+            trivially satisfiABLE, and GradNorm reads the small gradient as
+            under-weighting and amplifies it (w -> 7366 against
+            ||grad L|| = 4.97e-07).
+
+        The magnitude gate cannot do the regime job, and this is measurable
+        rather than arguable: across all 81 balancer updates in the Day-28
+        log, `pde_richards` carries a LARGER gradient than `ic_disp`, so any
+        floor high enough to freeze the first freezes the second -- and
+        `ic_disp`'s 4.71e+04 is a real requirement (D-W.2). No constant
+        separates them.
+
+        `activity` is a partial mapping; a term absent from it is assumed
+        active, which is correct for the six terms that have no flux fraction.
+        `regime_floor = 0.0` (the default) disables the gate entirely and
+        reproduces the pre-Day-28 behaviour exactly.
+
+        THE FLOOR IS NOT CALIBRATED AND MUST NOT BE GUESSED. The attainable
+        flux fraction is a MATERIAL property spanning 4.03e-04 (Mk) to
+        9.12e-01 (Tm), so `activity` must be normalised per stratum before it
+        reaches here -- pass `p / residuals.attainable_flux_fraction(mat)`,
+        not raw p. See D-A.2. And it cannot be calibrated on an `unbounded`
+        run at all: C* vanishes at saturation, so psi >= 0 points read
+        p = 1.000 by construction and the signal measures the ansatz.
+        """
         gmax = max(norms.values(), default=0.0)
         if gmax <= 0.0:
             return {}
         floor = self.cfg.activity_floor * gmax
-        return {k: g for k, g in norms.items() if g > floor}
+        act = activity or {}
+        rf = self.cfg.regime_floor
+        return {k: g for k, g in norms.items()
+                if g > floor and (rf <= 0.0 or act.get(k, 1.0) >= rf)}
 
     def _target(self, active: Mapping[str, float]) -> float:
         mode = self.cfg.target
@@ -670,8 +711,16 @@ class LossBalancer:
                          "{'anchor', 'geomean', 'mean'}")
 
     # -- public API --------------------------------------------------------
-    def update(self, losses: Mapping[str, Tensor]) -> Dict[str, float]:
-        """One weight update. Returns the new weights."""
+    def update(self, losses: Mapping[str, Tensor],
+               activity: Optional[Mapping[str, float]] = None
+               ) -> Dict[str, float]:
+        """One weight update. Returns the new weights.
+
+        `activity` is an optional per-term regime signal in [0, 1], already
+        normalised per stratum. Terms below `cfg.regime_floor` are frozen
+        even when their gradient is large. Omit it (or leave regime_floor at
+        0.0) for the pre-Day-28 magnitude-only behaviour. See `_active`.
+        """
         norms = grad_norm_table({k: losses[k] for k in self.terms
                                  if k in losses}, self.params)
         self._last_norms = dict(norms)
@@ -679,7 +728,7 @@ class LossBalancer:
                                dict(norms)))
         if len(self.snapshots) > 2:    # keep first and latest only
             self.snapshots = [self.snapshots[0], self.snapshots[-1]]
-        active = self._active(norms)
+        active = self._active(norms, activity)
         self._frozen = set(self.terms) - set(active)
         if len(active) < 2:
             # nothing to balance against; leave the weights alone rather than
@@ -721,10 +770,18 @@ class LossBalancer:
         return dict(self.w)
 
     def maybe_update(self, step: int,
-                     losses: Mapping[str, Tensor]) -> Dict[str, float]:
-        """Update on cadence; no-op otherwise. Cheap to call every step."""
+                     losses: Mapping[str, Tensor],
+                     activity: Optional[Mapping[str, float]] = None
+                     ) -> Dict[str, float]:
+        """Update on cadence; no-op otherwise. Cheap to call every step.
+
+        `activity` is only consulted on an update step, so a caller computing
+        a flux fraction can gate that work on the same cadence rather than
+        paying for it every epoch -- the same reasoning that keeps
+        `grad_norm_table` off the hot path.
+        """
         if step >= self.cfg.warmup and step % self.cfg.every == 0:
-            return self.update(losses)
+            return self.update(losses, activity)
         return dict(self.w)
 
     def total(self, losses: Mapping[str, Tensor]) -> Tensor:

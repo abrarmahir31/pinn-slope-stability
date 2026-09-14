@@ -304,8 +304,6 @@ This is the class of error that trains fine, converges, and produces a
 plausible-looking field with the pore pressure stabilising the slope instead
 of destabilising it.
 
-### D-3.3.2 — Kozeny–Carman is per-stratum, and Tm is undecided
-
 ### D-3.3.2 — Kozeny–Carman applies to the marls, not to Tm
 
 `KC_DEFAULT = KCConfig(enabled=True, per_unit={"Tm": False})` in
@@ -363,6 +361,35 @@ the 30-day window, crossing the whole 158 m domain in about nine days
 (`scripts/inert_fraction.py`). A piston front that fast is a matrix-continuum
 artefact of the same kind D-3.3.2 excludes KC for. Cite both together; they
 are one modelling caveat, not two.
+
+### D-3.3.3 — `effective_stress_nd` removed in favour of `total_stress_nd` — ENTRY MISSING
+
+**This decision was made and implemented; only the entry is absent.** Recorded
+here (Day 28) so the gap is visible rather than silent. Previously read as a
+numbering error — it is not: `.1 .2 .2 .4` was a duplicated `D-3.3.2` header
+with no body (now removed) PLUS a genuinely unwritten `.3`.
+
+Cited by five files, so the decision is load-bearing:
+`src/nondim.py:228`, `src/mechanics.py:29`, `src/loss.py:339`,
+`tests/test_initial_equilibrium.py:20,87,117`, `tests/test_coupling.py:12`.
+
+What the code attests, and nothing more:
+
+* `effective_stress_nd` is REMOVED, not aliased. It now raises
+  `NotImplementedError` (`nondim.py:227`). The stated reason is that both the
+  sign AND the argument changed — the argument is now an increment — so a
+  silent forward would be "wrong twice over".
+* `total_stress_nd` replaces it.
+* This is DISTINCT from D-3.3.1, which flipped the sign of
+  `effective_stress_nd` but kept the function. D-3.3.3 is the later removal.
+* `test_initial_equilibrium.py:117` records the initial-equilibrium residual as
+  0.604 / 0.579 / 1.06e-06 BEFORE D-3.3.3.
+* `loss.py:339` states the traction-free condition is on total stress and that
+  D-3.3.3 is what made that quantity assemblable.
+
+**The reasoning is not reconstructible from the source and has to be written by
+hand.** Do not let this stub stand as the entry — `test_initial_equilibrium`
+and the `bc_mech` anchor both rest on it.
 
 ### D-3.3.4 — L_BC_mech inherits L_BC's normalisation, which is the sampler's choice
 
@@ -456,3 +483,113 @@ adaptive criterion must be the flux fraction
 `max(|diffusion|, |gravity|) / |storage|` — the same quantity that fixes
 `inspect_richards_terms.py`'s miscalibrated verdict labels, so the two items
 are one.
+
+## Ansatz (Day 28)
+
+### D-A.1 — `unbounded` is rejected on the 3×3; cap vs exp is left open
+
+`NearPhysical` gains `mode` ∈ {`unbounded`, `cap`, `exp`} and `cap_k`. **The
+default is unchanged (`unbounded`)**, so every prior checkpoint, `PI_SEED_8X64`
+and Step 3.4 weight stays valid; the arms are selected explicitly by
+`--ansatz`.
+
+Measured, 3 arms × 3 seeds × 2000 epochs at N_PDE = 10000, production settings
+(`scripts/ansatz_ablation.py`, `docs/ansatz_ablation_prod.json`). L_i/L0_i at
+step 2000:
+
+| arm | bc | pde_mech | pde_richards | psi_max (m) |
+|---|---|---|---|---|
+| `unbounded` | 3.3e-01 .. 1.5e-03 | 1.4e-03 .. 2.7e-01 | 1.0e-05 .. 3.8e-05 | −3.3 .. −22.7 |
+| `cap` k=100 | 1.1e-02 .. 3.5e-05 | 2.0e-04 .. 2.3e-04 | 2.3e-05 .. 4.2e-01 | −0.00 .. −3.26 |
+| `exp` | 3.1e-05 .. 7.7e-04 | 1.6e-04 .. 4.2e-04 | 2.2e-03 .. 1.2e-02 | −2.76 .. −3.07 |
+
+**`unbounded` is REJECTED.** `bc` is three to four orders worse in every seed,
+and it is the only arm that drives `pde_richards`/`pde_mech` onto the clip. The
+mechanism is not a tuning failure: the domain is unsaturated everywhere
+(Z_WT = 197 m against Z_BASE = 200 m), and `psi* = psi0* + eps_psi*raw` off a
+bare `nn.Linear` puts 15–35% of points at psi ≥ 0 at eps_psi = 0.3 — unphysical
+by up to 185 m of head.
+
+**cap vs exp is NOT settled.** `cap` is better when it works, but seed 20250812
+gives `pde_richards` = 4.18e-01 (reproduced from CPU's 2.56, so not noise) and
+is the seed whose `psi_max` pinned at −0.00 against the cap. `exp` is uniformly
+mediocre and never fails. One more seed each decides whether cap's failure is
+1-in-3 or rarer.
+
+**`unbounded/20250812` is not matched** and nothing may lean on it: it ran with
+`--n-iface 400` while the other eight used 500, and it is the only cell with
+`ic_head` > 1. Clear and re-run before quoting it.
+
+**Conditional validity.** psi ≤ 0 holds only while
+`INFILTRATION_MODE = "capacity_limited"` and `SEEPAGE_FACE_MODE = "noflow"`,
+both of which are open items. If either changes, this decision is reopened
+rather than adjusted.
+
+**Read `(ic_head, psi_max)` as a pair.** Low `ic_head` with a very negative
+`psi_max` is not success — it is the field parking near its IC and doing no
+physics. `unbounded` seed 7 ends at `ic_head` 0.30 with `psi_max` −22.7 m;
+seed 20250812 at `ic_head` 2.13 with `psi_max` −6.8 m. The second is arguably
+healthier.
+
+### D-A.2 — the regime signal is the flux fraction, and it has no global threshold
+
+The blocker D-A.1 exposed is that `activity_floor` gates on gradient-norm
+MAGNITUDE, which cannot distinguish a term that is small because it is SOLVED
+from one that is small because its equation has degenerated to
+`C* dpsi*/dt* = 0`. In the `exp`/seed-7 polish the balancer ended with
+`w[pde_richards]` = 7366 against ‖grad L‖ = 4.97e-07, seven orders below
+`pde_mech`.
+
+**No constant can fix it, and this is measured rather than argued.** Across all
+81 balancer updates in the Day-28 log, `pde_richards` carries a *larger*
+gradient than `ic_disp` — relative norms 1.4e-05 to 5.5e-05 against 2.5e-06 to
+5.9e-06. Any floor high enough to freeze the first freezes the second, and
+`ic_disp`'s 4.71e+04 is a real requirement (D-W.2). The two are interleaved in
+the wrong order.
+
+The signal adopted is the pointwise flux fraction
+(`residuals.flux_fraction`):
+
+    p = max(|diffusion|, |gravity|) / (|storage| + |diffusion| + |gravity|)
+
+**Freeze LOW, not at 0.5.** p → 0 is the degenerate limit; p ≈ 0.5 is storage
+balanced against one flux, i.e. what a solved transient Richards equation looks
+like. The Day-27 note's "freeze on p ≈ 0.5" recorded the *healthy* value, not a
+trigger.
+
+**But 0.05 is also wrong, and by four orders.** The attainable ceiling on p is a
+MATERIAL property, recomputed by `residuals.attainable_flux_fraction`: 4.027e-04
+(Mk), 4.922e-04 (Mk_d), 9.118e-01 (Tm). The marls cannot reach 0.05 at any
+saturation, so an absolute cut is an unconditional disable of `pde_richards` in
+12.7% of the domain however well the network is solving. Tm only exceeds 0.05
+within ~10 cm of saturation, while the healthy arms sit at psi_max = −2.7 to
+−3.3 m, so it disables Tm in practice too. **Normalise by the per-material
+ceiling before comparing across strata, or scope the rule to Tm and record
+that.** The reduction across the three tags into one weight for `pde_richards`
+is OPEN.
+
+**The threshold cannot be calibrated before D-A.1 closes.** van Genuchten C* is
+identically zero at psi = 0, so at a saturated point the storage term does not
+shrink — it VANISHES, and p reads 1.000 by construction. Measured, 36.9% of Tm
+at t = 30 under `unbounded` (seed 7) sits at psi ≥ 0 reading p = 1.000, while
+the physical psi < 0 points sit at 2.48e-05. The equation has changed type at
+those points; they are not Richards at all. A threshold fitted there measures
+the ansatz.
+
+**Reduce with a fraction, not a quantile.** `frac(p > p_ref)` is bounded and
+cannot be dragged by a handful of extreme points; across five collocation draws
+on a fixed network the spread is 1.04x against 2.54x for p99. A tail-sensitive
+statistic would rebuild the D-W.7b seed-variance failure one layer up.
+
+Implemented as `BalancerConfig.regime_floor`, **default 0.0 = OFF** (D-W.8), so
+the magnitude-only behaviour is unchanged until a floor is calibrated.
+
+### D-A.3 — a checkpoint's ansatz is read from the checkpoint, not from a flag
+
+`mode` changes the FORWARD PASS, so rebuilding `NearPhysical` with the default
+evaluates a `cap` or `exp` checkpoint as `unbounded` and yields a different
+field from the same weights. `train.py` has always stored it (`cfg: vars(a)`);
+neither `inspect_richards_terms.py` nor `flux_fraction.py` read it until now.
+Both take it from `cfg["ansatz"]`, warn when the key is absent, and accept
+`--mode` only as an override. Symptom of the bug: psi ≥ 0 points appearing in a
+run of a bounded arm.

@@ -19,24 +19,33 @@ The mixed-form residual is
         \_____ storage ____/   \________ diffusion _________/   \____ gravity ___/
 
 `residuals.richards_residual(..., return_terms=True)` already hands back the
-three pieces. What matters is their SIZE relative to |R|:
+three pieces. What matters is the size of the FLUXES against STORAGE.
 
-  * all three terms individually ~ |R|  -> degenerate. Nothing is being
-    balanced; the equation is trivially satisfied because every flux has
-    collapsed. The loss value is meaningless and so is anything downstream.
-  * terms >> |R| -> genuine cancellation. Storage is being balanced against
-    the fluxes to some number of digits, which is what convergence looks like.
+SUPERSEDED (Day 28) — this script used to measure
+CANCELLATION = max|term| / |R|, on the reasoning that terms >> |R| means
+storage and the fluxes are balancing to some number of digits. That ratio is
+pinned at 1.000 on every production row ever measured
+(`docs/richards_terms_prod02.json`, all twelve): |R| IS the storage term to
+8-9 significant figures, because the fluxes are eight orders below it and
+never enter the sum. So `max|term|` is storage, `|R|` is storage, and the
+ratio is storage/storage. The `cancel >= 1e3` branch was unreachable and
+every verdict was decided by K/K_ic alone.
 
-The ratio that decides it is CANCELLATION = max|term| / |R|. One digit of
-cancellation is nothing; six digits is a solved equation.
+The measure is now `residuals.flux_fraction`, computed POINTWISE:
 
-CANCELLATION ALONE IS NOT ENOUGH, and reading it alone gives a false positive
-at t = 0. `nondim.py:257` is explicit that a hydrostatic field gives EXACTLY
-zero flux -- q*_z groups as -Pi_R_grav K* (Pi_R_hz dpsi*/dz* + 1), which
-vanishes at dpsi*/dz* = -1/Pi_R_hz. The initial condition IS hydrostatic, so
-both flux terms being tiny at t = 0 is the ansatz being right, not the field
-being dead. Exactly the trap that made pde_richards = 5e-08 look like
-convergence on Day 25.
+    p = max(|diffusion|, |gravity|) / (|storage| + |diffusion| + |gravity|)
+
+reported as `reach` = p / `residuals.attainable_flux_fraction(mat)`, because
+the attainable ceiling is a MATERIAL property spanning 4.03e-04 (Mk) to
+9.12e-01 (Tm) and absolute p is not comparable across strata. See D-A.2.
+
+THE FLUX FRACTION ALONE IS NOT ENOUGH, and reading it alone gives a false
+positive at t = 0. `nondim.py:257` is explicit that a hydrostatic field gives
+EXACTLY zero flux -- q*_z groups as -Pi_R_grav K* (Pi_R_hz dpsi*/dz* + 1),
+which vanishes at dpsi*/dz* = -1/Pi_R_hz. The initial condition IS
+hydrostatic, so both flux terms being tiny at t = 0 is the ansatz being right,
+not the field being dead. Exactly the trap that made pde_richards = 5e-08 look
+like convergence on Day 25.
 
 So the script carries a CONTROL: K* evaluated on the trained psi*, against K*
 evaluated on the analytic IC psi*0 = -(L z* - 197)/H at the same points. The
@@ -66,8 +75,42 @@ from src.loss import psi_of
 from src.materials import load_materials
 from src.model import PINN, NearPhysical
 from src.nondim import SCALES
-from src.residuals import richards_residual, swcc_from_material
+from src.residuals import (attainable_flux_fraction, flux_fraction,
+                           richards_residual, swcc_from_material)
 from src.sampling import sample_interior
+
+
+def net_from_ckpt(d, cfg, BOUNDS, eps_psi=None, mode=None, cap_k=None):
+    """Rebuild the ansatz the checkpoint was TRAINED with.
+
+    `train.py` stores `cfg: vars(a)` in every checkpoint, so `ansatz`,
+    `cap_k` and `eps_psi` are all on disk. Neither diagnostic script read
+    them until Day 28, and reconstructing with NearPhysical's defaults is
+    not a cosmetic mislabel -- `mode` changes the FORWARD PASS, so an `exp`
+    or `cap` checkpoint loaded without it is evaluated as `unbounded` and
+    yields a different field from the same weights. Symptom: psi >= 0 points
+    appearing in a run of a bounded arm.
+
+    Explicit arguments still override, for checkpoints predating the key.
+    """
+    saved = d.get("cfg") or {}
+    eps = eps_psi if eps_psi is not None else saved.get("eps_psi")
+    md = mode if mode is not None else saved.get("ansatz")
+    ck = cap_k if cap_k is not None else saved.get("cap_k")
+    kw = {}
+    if eps is not None:
+        kw["eps_psi"] = float(eps)
+    if md is not None:
+        kw["mode"] = md
+    if ck is not None:
+        kw["cap_k"] = float(ck)
+    if md is None:
+        print("WARNING: checkpoint carries no 'ansatz' key; falling back to "
+              "NearPhysical's default. If this was a cap/exp run the field "
+              "below is WRONG. Pass --mode explicitly.")
+    net = NearPhysical(PINN(cfg, BOUNDS), **kw)
+    net.load_state_dict(d["net"])
+    return net
 
 
 def q(v, ps=(50, 90, 99, 100)):
@@ -86,11 +129,18 @@ def main(argv=None):
                     help="ansatz prefactor the checkpoint was TRAINED with. "
                          "Default: NearPhysical's current default (0.3). "
                          "Anything before 2 Sep needs 3e-3.")
+    ap.add_argument("--mode", default=None, choices=("unbounded", "cap", "exp"),
+                    help="override the ansatz mode. Default: read from the "
+                         "checkpoint's cfg, which is where it belongs.")
+    ap.add_argument("--cap-k", type=float, default=None)
     ap.add_argument("--n", type=int, default=4000,
                     help="interior collocation points (default 4000)")
     ap.add_argument("--sampling-seed", type=int, default=20260808)
     ap.add_argument("--t", type=float, nargs="+", default=[0.0, 1.0, 7.0, 30.0],
                     help="days at which to evaluate")
+    ap.add_argument("--p-ref", type=float, default=1e-3,
+                    help="reference for the reported live fraction. NOT a\n"
+                         "calibrated threshold; see scripts/flux_fraction.py --why.")
     ap.add_argument("--json", metavar="PATH")
     a = ap.parse_args(argv)
 
@@ -98,9 +148,8 @@ def main(argv=None):
     d = torch.load(a.ckpt, map_location="cpu", weights_only=False)
     cfg = full()
     cfg.device, cfg.dtype = "cpu", "float64"
-    kw = {} if a.eps_psi is None else {"eps_psi": a.eps_psi}
-    net = NearPhysical(PINN(cfg, BOUNDS), **kw)
-    net.load_state_dict(d["net"])
+    net = net_from_ckpt(d, cfg, BOUNDS, eps_psi=a.eps_psi, mode=a.mode,
+                        cap_k=a.cap_k)
     net.eval()
 
     print(f"checkpoint: {a.ckpt}   step: {d.get('step')}")
@@ -121,7 +170,7 @@ def main(argv=None):
     L, H = SCALES.L_ref, SCALES.H_ref
     hdr = (f"{'t (d)':>6}{'tag':>6}{'n':>6}"
            f"{'|R| p50':>12}{'storage':>12}{'diffusion':>12}{'gravity':>12}"
-           f"{'K* p50':>11}{'K/K_ic':>9}{'cancel':>9}  verdict")
+           f"{'p p50':>10}{'reach':>8}{'K/K_ic':>9}{'psi>=0':>8}  verdict")
     print(hdr)
     print("-" * len(hdr))
 
@@ -145,26 +194,60 @@ def main(argv=None):
                        / K_ic.median()).item()
 
             absR = R.detach().abs()
-            big = max(terms[k].detach().abs().median().item()
-                      for k in ("storage", "diffusion", "gravity"))
             medR = absR.median().item()
-            cancel = big / medR if medR > 0 else float("inf")
 
-            # Low cancellation is only damning if the field has also left
-            # the IC. Hydrostatic + low flux is correct; dry + low flux is
-            # the collapse.
-            if cancel >= 1e3:
-                verdict = "solving"
+            # THE REGIME MEASURE. Was `cancel = max(median|term|)/median|R|`,
+            # which is pinned at 1.000 on every production row measured so far
+            # (docs/richards_terms_prod02.json, all twelve): |R| IS storage to
+            # 8-9 significant figures, so `max|term|` is storage and the ratio
+            # is storage/storage. The `cancel >= 1e3` branch was unreachable
+            # and every label was decided by k_ratio alone. `flux_fraction`
+            # compares the fluxes to storage instead, which is the quantity
+            # the question was always about.
+            p = flux_fraction(terms)
+            ceiling = attainable_flux_fraction(mats[tag], SCALES)
+            # Normalised by what THIS material can reach. Tm's ceiling is
+            # 0.912 and the marls' is ~5e-04, so an absolute cut would call
+            # the marls dead at every saturation. See D-A.2.
+            reach = float(p.median()) / ceiling
+            live = float((p > a.p_ref).double().mean())
+
+            psi_now = fields(x, z, t).detach().reshape(-1)
+            sat_frac = float((psi_now >= 0).double().mean())
+
+            # Ordered by how badly each condition invalidates the others.
+            if sat_frac > 0.0:
+                # C* is identically zero at psi = 0, so storage VANISHES and
+                # p reads 1.000 by construction. The equation has changed type
+                # at those points; nothing else on this row means anything.
+                verdict = "UNPHYSICAL"
             elif k_ratio < 0.1:
                 verdict = "DRY-COLLAPSE"
-            elif cancel < 10:
-                verdict = "hydrostatic?"
+            elif reach >= 0.1:
+                verdict = "solving"
+            elif t_days == 0.0 and 0.5 <= k_ratio <= 2.0:
+                # Correct ONLY at t = 0: the IC is hydrostatic and gives zero
+                # flux by design (nondim.py:257). Never a valid label later.
+                verdict = "hydrostatic"
+            elif t_days == 0.0:
+                # At t = 0 the field IS the analytic IC, so K/K_ic must be ~1.
+                # Checked BEFORE the wetting branch: at t = 0 there has been
+                # no time to wet, so k_ratio > 2 there is a misfit, not a
+                # front. prod02 reports 0.223 in Mk and the old code labelled
+                # it `hydrostatic?`, which it cannot be.
+                verdict = "IC MISFIT"
+            elif k_ratio > 2.0:
+                # Wetter than the IC with the fluxes still dead. The rain BC
+                # has moved water in and nothing is transporting it.
+                verdict = "WETTING, NO FLUX"
             else:
-                verdict = "weak"
+                verdict = "STALLED"
 
             row = {"t_days": t_days, "tag": tag, "n": int(m.sum()),
-                   "cancellation": cancel, "k_over_k_ic": k_ratio,
-                   "verdict": verdict,
+                   "flux_fraction_p50": float(p.median()),
+                   "ceiling": ceiling, "reach": reach, "live_frac": live,
+                   "psi_ge0_frac": sat_frac,
+                   "k_over_k_ic": k_ratio, "verdict": verdict,
                    "R": q(R), "K_star": q(terms["K_star"]),
                    **{k: q(terms[k]) for k in
                       ("storage", "diffusion", "gravity")}}
@@ -175,32 +258,35 @@ def main(argv=None):
                   f"{terms['storage'].detach().abs().median():>12.3e}"
                   f"{terms['diffusion'].detach().abs().median():>12.3e}"
                   f"{terms['gravity'].detach().abs().median():>12.3e}"
-                  f"{terms['K_star'].detach().median():>11.3e}"
-                  f"{k_ratio:>9.2g}{cancel:>9.2g}  {verdict}")
+                  f"{float(p.median()):>10.2e}{reach:>8.3f}"
+                  f"{k_ratio:>9.2g}{sat_frac:>8.3f}  {verdict}")
         print()
 
-    print("cancel = max(median |term|) / median |R|: the digits of "
-          "cancellation between\nstorage and the fluxes. K/K_ic = trained K* "
-          "over K* on the analytic\nhydrostatic IC at the same points.\n\n"
-          "  solving       cancel >= 1e3. Storage and the fluxes genuinely "
-          "balance.\n"
-          "  weak          one or two digits, field still near the IC. Real "
-          "but shallow.\n"
-          "  hydrostatic?  cancel < 10 but K/K_ic ~ 1. Every term is tiny "
-          "because the\n"
-          "                field is still hydrostatic, which gives zero flux "
-          "BY DESIGN\n"
-          "                (nondim.py:257). Expected at t = 0. At t = 30 it "
-          "means the\n"
-          "                rain-flux BC has not moved anything.\n"
-          "  DRY-COLLAPSE  K/K_ic < 0.1. The domain has dried past its own "
-          "initial\n"
-          "                condition, K_r has gone with it, and both flux "
-          "terms are\n"
-          "                structurally zero. pde_richards is then being "
-          "BOUGHT, not\n"
-          "                solved, and nothing downstream of it means "
-          "anything.")
+    print("p      = median flux fraction, max(|diff|,|grav|)/(|stor|+|diff|+|grav|),\n"
+          "         computed POINTWISE then reduced. Replaces `cancel`, which was\n"
+          "         pinned at 1.000 on every production row because |R| is storage.\n"
+          "reach  = p / the ceiling THIS material can attain (Mk 4.03e-04,\n"
+          "         Mk_d 4.92e-04, Tm 9.12e-01). Absolute p is not comparable\n"
+          "         across strata; reach is.\n"
+          "K/K_ic = trained K* over K* on the analytic hydrostatic IC.\n"
+          "psi>=0 = fraction of points at or above saturation.\n\n"
+          "  solving           reach >= 0.1. The fluxes are doing a real share of\n"
+          "                    what this material permits.\n"
+          "  hydrostatic       t = 0 only, K/K_ic ~ 1. Zero flux is correct there\n"
+          "                    BY DESIGN (nondim.py:257).\n"
+          "  IC MISFIT         t = 0 but K/K_ic is not ~1. The field does not match\n"
+          "                    its own initial condition; prod02 reports 0.223 in Mk.\n"
+          "  WETTING, NO FLUX  K/K_ic > 2 with dead fluxes. Water has arrived and\n"
+          "                    nothing is moving it. Was mislabelled `hydrostatic?`.\n"
+          "  STALLED           t > 0, field near the IC, fluxes dead. The BC has not\n"
+          "                    moved anything.\n"
+          "  DRY-COLLAPSE      K/K_ic < 0.1. Dried past its own IC, K_r gone with it,\n"
+          "                    both flux terms structurally zero. pde_richards is\n"
+          "                    being BOUGHT, not solved.\n"
+          "  UNPHYSICAL        psi >= 0 present. C* is identically zero at\n"
+          "                    saturation, so storage vanishes and p reads 1.000 by\n"
+          "                    construction. The equation has changed TYPE at those\n"
+          "                    points. Every other column on the row is void.")
 
     if a.json:
         with open(a.json, "w") as f:
