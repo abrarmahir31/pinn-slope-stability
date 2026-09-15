@@ -41,7 +41,7 @@ The remainder: n₀ recomputed from each stratum's own unit weight (the weak-zon
 
 ## Two things the dataset will not let you forget
 
-**Π_R,diff = 3.0 × 10⁻⁶ is not a bug.** With T_ref = 1 day the Richards diffusion group sits six orders below unity because the pit's diffusive timescale is ~916 years — a pressure signal genuinely barely moves in a day. Non-dimensionalising the *variables* does not by itself put every residual *term* at O(1). Keep T_ref = 1 day (the rainfall transient is your phenomenon), normalise the seepage residual explicitly in the loss, and report Π_R,diff so the weighting is reproducible. Reviewers of PINN papers look for exactly this.
+**Π_R,diff = 1.5 × 10⁻³ is not a bug.** With T_ref = 1 day the Richards diffusion group sits about three orders below unity because the pit's diffusive timescale is ~1.8 years — a pressure signal genuinely barely moves in a day. Non-dimensionalising the *variables* does not by itself put every residual *term* at O(1). Keep T_ref = 1 day (the rainfall transient is your phenomenon), normalise the seepage residual explicitly in the loss, and report Π_R,diff so the weighting is reproducible. Reviewers of PINN papers look for exactly this.
 
 **Section geometry is Grade C.** The Fig. 19 profiles are digitised from small rasters with vertical exaggeration: ±10 m. A 10 m error in slope height moves F by more than the 5–10 % agreement band your proposal commits to. The coordinates are adequate to size the collocation domain and place boundary conditions while you build the code — not to produce a publishable SSR number. Re-digitise from the vector PDF before final runs.
 
