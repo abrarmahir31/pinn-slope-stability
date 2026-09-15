@@ -29,3 +29,4 @@ scratch_*.py
 *_cache.npz
 runs/
 *.patch
+*.log
