@@ -118,6 +118,7 @@ def main(argv=None):
     mats = load_materials()
 
     U_ref = SCALES.U_ref
+    L_ref = SCALES.L_ref   # coll.x/.z are x*/L_ref; the axes are in metres
     sig_ref = SCALES.sig_ref
     rows, X, Zc, Ud, Vd, FS, TAG = [], [], [], [], [], [], []
 
@@ -155,8 +156,11 @@ def main(argv=None):
         with np.errstate(divide="ignore", invalid="ignore"):
             fs = np.where(s1 > 0, s1_env / s1, np.inf)
 
-        X.append(coll.x[m].detach().numpy().ravel())
-        Zc.append(coll.z[m].detach().numpy().ravel())
+        # Dimensionalise: without this every point lands outside the
+        # metre-scale axis limits below and all three panels render blank
+        # while the colourbars still populate from the data.
+        X.append(coll.x[m].detach().numpy().ravel() * L_ref)
+        Zc.append(coll.z[m].detach().numpy().ravel() * L_ref)
         Ud.append(u.detach().numpy().ravel())
         Vd.append(v.detach().numpy().ravel())
         FS.append(fs)
@@ -221,7 +225,9 @@ def main(argv=None):
     for ax in axes:
         ax.set_xlabel("x (m)")
         ax.set_xlim(g.X_MIN, g.X_MAX)
-        ax.set_ylim(g.Z_BASE, g.Z_CREST)
+        # Data reaches the natural ground above the crest, so Z_CREST as a
+        # ceiling silently clips the upper slope.
+        ax.set_ylim(g.Z_BASE, max(g.Z_CREST, float(Zc.max())) + 2.0)
     axes[0].set_ylabel("elevation (m)")
     fig.tight_layout()
 
