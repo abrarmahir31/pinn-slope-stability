@@ -167,8 +167,11 @@ def _has_failed(rec, ref, a):
 
 
 # --- adapter ---------------------------------------------------------------
-# Everything below assumes loss.total_loss accepts `yield_params` and
-# `w_yield`. It does not yet. This is the wiring task.
+# WIRED (Step 5.1): loss.total_loss now accepts `yield_params`, `w_yield` and
+# `yield_criterion`, and reports `pde_yield` plus per-tag `admissible_*` in
+# parts. It is the SOFT-CONSTRAINT arm -- see loss.L_yield's docstring. The
+# FOS this sweep reports depends on `w_yield`; run several and show the
+# plateau.
 def _finetune(net, coll, loss_fn, a, yparams, epochs):
     opt = torch.optim.Adam(net.parameters(), lr=a.lr)
     last = None

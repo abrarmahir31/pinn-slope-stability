@@ -17,6 +17,8 @@ from src.nondim import SCALES, Scales
 from src.coupling import KC_DEFAULT, KC_OFF, KCConfig, kozeny_carman_factor
 from src.mechanics import mechanical_residual, strain_star, total_stress_star
 from src.residuals import richards_residual, darcy_flux, interface_flux_jump
+from src import strength as st
+from src import plasticity as pl
 from src.sampling import load_initial
 from src.step21_geometry import boundaries as bnd
 
@@ -209,6 +211,82 @@ def L_PDE_mech(net, coll, mats, s: Scales = SCALES, per_tag: bool = False,
 
     mech = total / wsum
     return mech, {"pde_mech": mech.detach(), **parts}
+
+
+def L_yield(net, coll, mats, yield_params, criterion: str = "GHB",
+            s: Scales = SCALES, per_tag: bool = False, bishop: bool = True):
+    """mean_w[ relu(f/sig_ref)^2 ] over the interior collocation set.
+
+    THIS IS THE SOFT-CONSTRAINT ARM, NOT RETURN MAPPING. That choice is
+    methodological and is recorded in docs/STEP5_STATUS.md; it is not settled
+    by this function existing. What it means in practice:
+
+      - there is NO flow rule, so no dilatancy and no associated /
+        non-associated distinction. Plastic strain is never computed and the
+        stress is never projected back onto the surface;
+      - the reported FOS therefore DEPENDS ON `w_yield`. A penalty weight is
+        not a constitutive law. Run the sweep at several `w_yield` and show
+        the FOS plateau, or the number is an artefact of the weighting.
+
+    Mirrors `L_PDE_mech`: tag-partitioned because each stratum has its own
+    strength parameters, weighted by `coll.w`, and requiring `coll.sigma0`
+    for the same reason -- the yield check is on TOTAL stress, sigma_0 plus
+    the network's increment, and sigma_0 = 0 would test a stress-free domain.
+
+    `yield_params` maps tag -> the params object `criterion` expects
+    (`strength.GHBParams` for "GHB", `strength.MCParams` for "MC"). Build it
+    with `plasticity.reduced_material_params` for an SRF-reduced set.
+
+    `sigma_scale` is `s.sig_ref` for every stratum, deliberately. Each
+    material's own sigma_ci would give the balancer a term whose scale moves
+    with the tag partition (see plasticity.yield_violation).
+    """
+    if coll.sigma0 is None:
+        raise ValueError(
+            "L_yield needs coll.sigma0; call sigma0.attach_sigma0(coll) at "
+            "sample time. Without it the yield check runs on the network's "
+            "stress increment alone, which is not the stress the slope sees."
+        )
+    missing = sorted(set(coll.tag.tolist()) - set(yield_params))
+    if missing:
+        raise KeyError(
+            f"L_yield: no yield_params for tag(s) {missing}. "
+            f"Have: {sorted(yield_params)}"
+        )
+
+    w_all = coll.w
+    wsum = w_all.sum()
+    total = torch.zeros((), dtype=coll.x.dtype, device=coll.x.device)
+    parts = {}
+
+    for tag in sorted(set(coll.tag.tolist())):
+        m = torch.as_tensor(coll.tag == tag, device=coll.x.device)
+        xs = coll.x[m].reshape(-1, 1).clone().requires_grad_(True)
+        zs = coll.z[m].reshape(-1, 1).clone().requires_grad_(True)
+        ts = coll.t[m].reshape(-1, 1).clone().requires_grad_(True)
+        sig0 = coll.sigma0[m]
+
+        (sxx, szz, sxz), _chi, _eps = total_stress_star(
+            net, xs, zs, ts, mats[tag],
+            sigma0_star=(sig0[:, 0:1], sig0[:, 1:2], sig0[:, 2:3]),
+            bishop=bishop, s=s)
+
+        # Compression-positive, and in Pa before meeting c / sigma_ci.
+        sig1, sig3 = st.principal_stresses_from_cartesian(sxx, szz, sxz)
+        sig1, sig3 = sig1 * s.sig_ref, sig3 * s.sig_ref
+
+        v = pl.yield_violation(sig1.reshape(-1), sig3.reshape(-1),
+                               yield_params[tag], criterion,
+                               sigma_scale=s.sig_ref)
+        contrib = (w_all[m] * v.pow(2)).sum()
+        total = total + contrib
+        if per_tag:
+            parts[f"pde_yield_{tag}"] = (contrib / w_all[m].sum()).detach()
+            parts[f"admissible_{tag}"] = torch.as_tensor(
+                float((v <= 1e-9).double().mean().item()))
+
+    yld = total / wsum
+    return yld, {"pde_yield": yld.detach(), **parts}
 
 
 # Segment -> condition type. Explicit, not inferred: every segment is named
@@ -475,6 +553,7 @@ DEFAULT_WEIGHTS = {
     "ic": 1.0,
     "bc": 1.0,
     "interface": 1.0,
+    "pde_yield": 1.0,
 }
 
 
@@ -482,7 +561,10 @@ def total_loss(net, coll, bcs, ic, ifaces, mats, s: Scales = SCALES,
                weights: dict | None = None,
                include_mechanics: bool = False,
                include_feedback: bool = False,
-               per_term: bool = False):
+               per_term: bool = False,
+               yield_params: dict | None = None,
+               w_yield: float | None = None,
+               yield_criterion: str = "GHB"):
     """Weighted sum of the hydraulic loss terms.
 
     Returns `(scalar, parts)`. `parts` always carries the four term totals
@@ -547,9 +629,29 @@ def total_loss(net, coll, bcs, ic, ifaces, mats, s: Scales = SCALES,
         bcm, bcm_parts = L_BC_mech(net, bcs, mats, s, per_segment=per_term)
         contrib["contrib_bc_mech"] = w["bc_mech"] * bcm
         mech_parts = {**mech_parts, **bcm_parts}
+    yield_parts = {}
+    if yield_params is not None:
+        if not include_mechanics:
+            raise ValueError(
+                "total_loss: yield_params given but include_mechanics=False. "
+                "The yield surface is checked on sigma_0 + D:eps, so without "
+                "the mechanical arm there is no stress to check and the term "
+                "would silently score a field nothing else constrains."
+            )
+        yld, yield_parts = L_yield(net, coll, mats, yield_params,
+                                   criterion=yield_criterion, s=s,
+                                   per_tag=per_term)
+        wy = w["pde_yield"] if w_yield is None else w_yield
+        contrib["contrib_pde_yield"] = wy * yld
+    elif w_yield is not None:
+        raise ValueError(
+            "total_loss: w_yield given without yield_params. A weight with no "
+            "term is a silent no-op; pass the params or drop the weight."
+        )
     total = sum(contrib.values())
 
-    parts = {**pde_parts, **mech_parts, **ic_parts, **bc_parts, **if_parts}
+    parts = {**pde_parts, **mech_parts, **ic_parts, **bc_parts, **if_parts,
+             **yield_parts}
     parts.update({k: v.detach() for k, v in contrib.items()})
     parts["total"] = total.detach()
     return total, parts

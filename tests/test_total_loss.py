@@ -25,7 +25,7 @@ SEED = 20250812
 MATS = load_materials()
 DTYPE = torch.float64
 TERMS = ("pde", "ic", "bc", "interface")
-MECH_TERMS = TERMS + ("pde_mech", "bc_mech")
+MECH_TERMS = TERMS + ("pde_mech", "bc_mech", "pde_yield")
 
 
 @pytest.fixture(scope="module")
@@ -239,3 +239,88 @@ def test_every_term_contributes_gradient(bundle):
             f"dropping {term} did not change the gradient; it may not be in "
             f"the sum"
         )
+
+# ---------------------------------------------------------------------------
+# Yield term (Step 5.1). SOFT CONSTRAINT -- see loss.L_yield's docstring for
+# what that costs methodologically. These tests check the WIRING, not that the
+# formulation is the right one.
+# ---------------------------------------------------------------------------
+
+def _yparams(bundle):
+    import src.strength as st
+    return {t: st.GHBParams(sigma_ci=m.sigma_ci, m_b=m.m_b, s=m.s, a=m.a)
+            for t, m in bundle["mats"].items()}
+
+
+def test_yield_absent_unless_asked(net, bundle):
+    """No yield_params means no pde_yield key and no cost. The one-way arm of
+    the Step 6.2 ablation must stay bit-for-bit what it was."""
+    _, parts = call(net, bundle)
+    assert "pde_yield" not in parts
+    assert "contrib_pde_yield" not in parts
+
+
+def test_yield_adds_a_nonnegative_contribution(net, bundle):
+    a, pa = call(net, _with_sigma0(bundle), include_mechanics=True)
+    b, pb = call(net, _with_sigma0(bundle), include_mechanics=True,
+                 yield_params=_yparams(bundle), w_yield=1.0)
+    assert float(pb["pde_yield"]) >= 0.0
+    assert float(b.detach()) >= float(a.detach())
+
+
+def test_yield_contrib_scales_with_w_yield(net, bundle):
+    yp = _yparams(bundle)
+    b = _with_sigma0(bundle)
+    _, one = call(net, b, include_mechanics=True,
+                  yield_params=yp, w_yield=1.0)
+    _, three = call(net, b, include_mechanics=True,
+                    yield_params=yp, w_yield=3.0)
+    assert float(three["contrib_pde_yield"]) == pytest.approx(
+        3.0 * float(one["contrib_pde_yield"]), rel=1e-9, abs=1e-40)
+    # and the term itself is unchanged -- only its weight moved
+    assert float(three["pde_yield"]) == pytest.approx(
+        float(one["pde_yield"]), rel=1e-12)
+
+
+def test_yield_contribs_still_sum_to_total(net, bundle):
+    total, parts = call(net, _with_sigma0(bundle), include_mechanics=True,
+                        yield_params=_yparams(bundle), w_yield=2.0)
+    s = sum(float(v) for k, v in parts.items() if k.startswith("contrib_"))
+    assert s == pytest.approx(float(total.detach()), rel=1e-12)
+
+
+def test_yield_without_mechanics_is_rejected(net, bundle):
+    """sigma_0 + D:eps is the stress the criterion reads. Without the
+    mechanical arm there is nothing to check and the term would score a field
+    no other term constrains."""
+    with pytest.raises(ValueError, match="include_mechanics"):
+        call(net, bundle, include_mechanics=False,
+             yield_params=_yparams(bundle))
+
+
+def test_w_yield_without_params_is_rejected(net, bundle):
+    """A weight with no term is a silent no-op -- exactly the kind of thing
+    that makes a sweep report a plateau that is really an absent term."""
+    with pytest.raises(ValueError, match="w_yield given without"):
+        call(net, bundle, w_yield=1.0)
+
+
+def test_yield_rejects_a_tag_it_has_no_params_for(net, bundle):
+    yp = _yparams(bundle)
+    yp.pop(sorted(yp)[0])
+    with pytest.raises(KeyError, match="no yield_params for tag"):
+        call(net, _with_sigma0(bundle), include_mechanics=True,
+             yield_params=yp, w_yield=1.0)
+
+
+def test_yield_gradient_reaches_the_network(net, bundle):
+    """The term must be differentiable w.r.t. the weights, or the sweep is
+    minimising something it cannot move."""
+    for p in net.parameters():
+        p.grad = None
+    total, _ = call(net, _with_sigma0(bundle), include_mechanics=True,
+                    yield_params=_yparams(bundle), w_yield=1.0)
+    total.backward()
+    g = sum(float(p.grad.abs().sum()) for p in net.parameters()
+            if p.grad is not None)
+    assert g > 0.0
