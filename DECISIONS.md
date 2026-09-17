@@ -593,3 +593,212 @@ neither `inspect_richards_terms.py` nor `flux_fraction.py` read it until now.
 Both take it from `cfg["ansatz"]`, warn when the key is absent, and accept
 `--mode` only as an override. Symptom of the bug: psi ≥ 0 points appearing in a
 run of a bounded arm.
+---
+
+## Step 5 — SSR decisions (Day 41, supervisor meeting)
+
+Evidence for all entries: `docs/SUPERVISOR_BRIEF.md`,
+`scripts/decision_evidence.py`, `docs/results/decision_evidence.json`. Every
+evidence number is a POINTWISE admissibility check of the frozen elastic
+baseline (`baseline-v1`), not a factor of safety.
+
+**Source labels.** *Decision* = made by the student and supervisor.
+*Analysis note* = measurement or interpretation added while recording, not a
+decision; it can be challenged without reopening the decision.
+
+### D-5.1 — Soft constraint, not return mapping
+
+*Decision.* The yield surface enters as the penalty
+`w_yield * mean_w[relu(f/sig_ref)^2]` (`loss.L_yield`). No flow rule, no
+plastic strain, no stress projection.
+
+*Decision, reason.* Implemented and tested now; return mapping is weeks of
+implementation and verification. The penalty-weight plateau (w_yield 0.3, 1,
+3) is required with every reported FOS.
+
+*Analysis note.* The meeting also raised "hard return mapping breaks automatic
+differentiation". It is not recorded as a reason: radial return is
+piecewise-smooth and differentiable return-mapping layers exist, so the claim
+would not survive examination. The plateau demonstrates that **the FOS** is
+insensitive to the penalty scaling over the tested range. It does not show
+stresses are admissible; the admissible fraction is reported separately at
+every SRF. No dilatancy and no associated/non-associated distinction belong in
+Limitations.
+
+### D-5.2 — MC-SSR strength
+
+*Decision: (d) rejected.* Reducing the bedding residual pair c = 4.4 kPa,
+phi = 15.4 deg as a continuum strength at every point. Evidence: pointwise on
+the baseline at SRF 1, Mk 0.000, Mk_d 0.069, Tm 0.019 admissible (area
+0.023). **98% of the slope is already outside the envelope**, the limestone
+basement included, before any reduction. A CPU smoke sweep showed
+admissibility rising with SRF as the penalty reshaped the field, so no
+failure could be detected. This supersedes the Phase-1 dataset note
+`mc_strength.design_pair` ("THIS is the pair to reduce in the MC-SSR sweep"),
+which is left in place.
+
+*Decision: (b) not selected, for schedule.* Bedding strength carried on a
+bedding interface or by a ubiquitous-joint model needs new constitutive code
+and its verification, which the development timeline does not allow. It is
+**not** rejected on physical grounds; it is the physically closer
+representation of a bedding-controlled mechanism, and belongs in Future Work.
+
+*Decision (Day 41, second ruling): (a), rock-mass MC equivalents, with
+`--mc-sig3max 400000` (400 kPa; 850 kPa named as the alternative).* Reason:
+(a) keeps a like-for-like continuum MC-vs-GHB comparison, whereas (c) drops MC
+entirely; 400 or 850 kPa covers the stress range of the middle-to-lower
+benches. Options as considered:
+- (a) rock-mass MC equivalents: Hoek, Carranza-Torres & Corkum (2002) c, phi
+  of each stratum's own GHB envelope over 0..sig3max
+  (`strength.ghb_equivalent_mc`, reproduces the Phase-1 stored equivalents
+  to 0.03%). `ssr_sweep.py --mc-strength rockmass --mc-sig3max <Pa>`. Needs
+  its own sig3max.
+- (c) no MC-SSR; the GHB-PINN FOS is compared against the LEM F = 0.94.
+
+*Analysis note on the sig3max value.* D-5.3 fits GHB over 0–179 kPa, so at
+400 kPa the MC equivalents linearise the envelope over a wider confinement
+range than the GHB reduction uses; the two criteria are then not fitted over
+the same range, which qualifies "like-for-like" and must be stated with the
+MC-vs-GHB difference. Pointwise on the baseline at SRF 1 the 400 kPa
+equivalents leave Mk_d 0.533 admissible (179 kPa-range GHB: 0.389; 850 kPa MC:
+0.655). Rock-mass equivalents at 400 kPa (Hoek 2002): Mk c 92.4 kPa phi 27.0;
+Mk_d c 33.4 kPa phi 13.5.
+`--mc-strength bedding` remains only to reproduce the (d) evidence.
+
+*Analysis note.* Under (a) the MC-vs-GHB comparison is between two fits of the
+same rock-mass envelope; it measures linearisation, not a different physical
+strength. CPU preview (50 epochs, N_PDE 400, sig3max 179 kPa, `ref`): Mk_d
+admissible 0.986 at SRF 1 falling to 0.900 at SRF 1.15, so (a) is workable.
+
+### D-5.3 — GHB fit range: sig3 0 to 179 kPa
+
+*Decision.* `--sig3-lo 0 --sig3-hi 1.79e5` (Pa), set on the marl p99 stress
+state to avoid the over-confinement of the Day-39 850 kPa default.
+
+*Analysis note.* Mk_d area-weighted sigma_3 at t = 30 d: p95 130.7 kPa, p99
+179.4 kPa (Mk p99 133.2 kPa). 850 kPa lies near Tm's p75 (793 kPa). Pointwise
+the range has a small effect: Mk_d admissible at SRF 1.25 is 0.192
+(0–131 kPa) vs 0.190 (0–850 kPa); the reduced envelopes agree to ~3 kPa over
+Mk_d's stress range and differ most at sigma_3 = 0 (27.5 vs 24.4 kPa). 12.1% of
+Mk_d (area) is in tension, below the fit range; tension is governed by the GHB
+cutoff, see the `make_fig6` clip note.
+
+### D-5.4 — Disturbance factor D = 1 retained
+
+*Decision.* D = 1 for all strata as stored, accounting for heavy production
+blasting and stress relief in the upper benches of the Sekkoy formation.
+
+*Analysis note, consequence for reporting.* D is the largest lever found. GHB
+admissibility of Mk_d at SRF 1 on the elastic baseline: 0.389 (D = 1), 0.906
+(D = 0.7), 0.989 (D = 0). At D = 1, 61% of Mk_d (about 6% of the area) is
+pointwise outside the envelope before reduction, the Day-40 "baseline already
+failing" result. Under D-5.1 the SRF 1 fine-tune moves the field toward
+admissibility (CPU preview: Mk_d 0.971 under `ref`), so the sweep reference is
+a penalty-adjusted field, not the elastic baseline; Methodology must say so.
+A D sensitivity arm would need re-solved sigma_0 (D enters E_rm) and is not
+scheduled. `freeze_baseline.py --accept-elastic-overstress` exists because
+this state trips the Day-34 elastic-check gate by construction.
+
+### D-5.5 — Admissible-drop metric: min_tag primary, tag:Mk_d secondary
+
+*Decision.* `min_tag` is the primary execution value: the default of
+`--admissible-metric`, and the only metric `_has_failed` uses. It tracks
+whichever stratum reaches critical yield first, so the detector is not blind
+to an unexpected failure location. `tag:Mk_d` hardcodes an expectation of
+where failure occurs, so it is recorded as a secondary, strata-specific
+metric: `--admissible-secondary` (default `tag:Mk_d`), written at every SRF
+(`admissible_secondary` in sweep.jsonl) and in result.json with explicit
+`admissible_metric_role` / `admissible_secondary_role` fields, never used to
+detect failure (`test_has_failed_ignores_the_secondary_metric`).
+
+*Decision: `area` rejected*, masked by Tm's 87% area share.
+
+*Analysis note.* Complete yielding of both marls moves `area` by at most
+0.068; `ssr_sweep.reachable_drop` reports this at the reference state.
+Pointwise, min_tag and tag:Mk_d coincide while Mk_d is the least admissible
+stratum.
+
+*Decision (second ruling): `--admissible-drop 0.15`*, chosen to capture a
+clean fall in admissible fraction without firing on small fluctuations.
+
+*Analysis note.* The cited basis, 0.389 at SRF 1 to 0.192 at SRF 1.25, is the
+POINTWISE elastic baseline. The sweep's reference is the penalty-adjusted
+field after the SRF 1 fine-tune (CPU preview: 0.971 under `ref`, 0.800 under
+`raw`), so those numbers are not the trajectory the threshold will see.
+Confirm 0.15 against the GPU smoke trajectories before the full sweeps; the
+preview fell 0.064 (`ref`) and 0.121 (`raw`) over SRF 1.00–1.15 at 50 epochs.
+
+### D-5.6 — baseline-v1 for validation; production baseline before headline numbers
+
+*Decision.* `baseline-v1` (runs/ansatz/exp_seed7, 2,000 epochs) is used for
+code testing and smoke sweeps. A fully converged production baseline must be
+trained before any headline FOS is reported, because baseline-v1 shows
+numerical creep artefacts that would contaminate published values: the nominally fixed
+base (u = v = 0) moves about 1.4 mm by t = 30 d. *Decision (wording):*
+"numerical creep artefacts" is the student's term and is retained.
+
+*Enforcement (analysis note on implementation).* `ssr_sweep.py` records the
+baseline checkpoint's SHA-256, step and epochs in result.json.
+`collect_results.py` marks any run whose baseline hash matches
+`baselines/baseline-v1/MANIFEST.json` as `validation_only:baseline-v1` (and
+runs with no hash as `unknown`); `make_ssr_figs.py` stamps figures drawn from
+such runs VALIDATION ONLY. Identity is by hash, not path or epoch count, so a
+copied checkpoint is still caught and no epoch threshold had to be invented.
+
+*Analysis note, found while recording.* `configs/production_labpc.args`
+carries no `--ansatz`, so `train.py @configs/production_labpc.args` trains the
+`unbounded` ansatz that D-A.1 rejected; its `--out runs/prod01` also points at
+an existing run. `scripts/run_production_baseline.bat` requires the ansatz,
+writes to `runs/prod_baseline_v2`, refuses an existing log, and freezes as
+`baseline-v2`. Wording was raised: in geomechanics "creep" also names
+time-dependent material deformation, so define the term at first use in
+Methodology as a numerical artefact of the under-converged baseline.
+
+### D-5.7 — Production baseline configuration
+
+*Decision: `--ansatz cap`* (D-A.1 cap vs exp). Reason given: bounded behaviour
+for numerical stability over long training.
+
+*Analysis note.* In this code the ansatz modes bound the pore-pressure head
+psi (psi <= 0), not activations, output scaling or stress gradients; the
+stability argument recorded in D-A.1 is about psi reaching saturation. There
+is also no Fault 17 in the Section 5 domain (F1 only). **Seed conflict:** in
+the D-A.1 ablation `cap` failed on exactly one seed, 20250812
+(`pde_richards` ratio 0.418 against 2.3e-05 and 7.9e-05 on seeds 1234 and 7;
+`psi_max` pinned at -1e-40, i.e. on the cap), and
+`configs/production_labpc.args` sets `--seed 20250812`. D-A.1 asked for one
+more seed per arm before concluding. `run_production_baseline.bat` therefore
+requires `SEED` explicitly.
+
+*Decision: `--lbfgs-epochs 500`* (500–1000 named) as a terminal polish after
+100k Adam epochs.
+
+*Analysis note.* Each L-BFGS iteration costs up to `--lbfgs-max-eval` (25)
+closure evaluations, so 500 iterations can cost up to ~12,500 Adam-epoch
+equivalents (~2 h on the 4060 Ti). Weights are frozen at handover; the
+`_lbfgs_phase` docstring warns this can drive a degenerate psi field further
+into its regime while the loss looks excellent. Check `psi_max_m` and `bc` in
+the log after the polish.
+
+### D-5.8 — Reporting choices
+
+*Decision: Fig 9 at t = 30 d* (`make_fig9.py --t 30`). *Analysis note:* the
+reason given refers to transient analytical drawdown and inflow curves; the
+Nguyen–Raudkivi drawdown validation belongs to Section 7 and has no
+counterpart in the Section 5 domain, so the reason recorded is the end of the
+30-day rainfall window. The separate choice of WHICH SRF state (`failed` or
+`stable` bracket end) is still open; `t` and the state are different settings.
+
+*Decision: reported `w_yield` = 1.0*, the centre of the 0.3/1/3 sweep,
+**conditional on the plateau holding**. *Analysis note:* the centre value does
+not by itself show FOS independence; the Fig 10 spread across all three does.
+If the spread is large, 1.0 is not reportable as-is.
+
+### Still open after Day 41
+
+| item | needed for | note |
+|---|---|---|
+| `--yield-norm` | all sweeps | only `raw` or `ref` exist; "1e-3 / 1e-4" given in the second ruling is not one of them |
+| SEED for the production baseline | D-5.7 | cap failed on 20250812 (D-A.1) |
+| Fig 9 SRF state, `failed` or `stable` | Fig 9 | distinct from t = 30 d |
+| confirm `--admissible-drop 0.15` | full sweeps | against GPU smoke trajectories |

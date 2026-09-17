@@ -49,16 +49,8 @@ import dataclasses
 
 
 def hoek2002_mc(p: st.GHBParams, sig3max: float) -> st.MCParams:
-    """Hoek, Carranza-Torres & Corkum (2002) equivalent c, phi over
-    0 <= sig3 <= sig3max. `p` already carries D through m_b and s."""
-    s3n = sig3max / p.sigma_ci
-    a, mb, s = p.a, p.m_b, p.s
-    k = 6.0 * a * mb * (s + mb * s3n) ** (a - 1.0)
-    d = (1.0 + a) * (2.0 + a)
-    phi = math.asin(k / (2.0 * d + k))
-    c = (p.sigma_ci * ((1.0 + 2.0 * a) * s + (1.0 - a) * mb * s3n)
-         * (s + mb * s3n) ** (a - 1.0) / (d * math.sqrt(1.0 + k / d)))
-    return st.MCParams(c=c, phi=phi)
+    """Alias kept for the evidence script; see strength.ghb_equivalent_mc."""
+    return st.ghb_equivalent_mc(p, sig3max)
 
 
 def admissible_by_tag(sig, tags, params_by_tag, criterion) -> dict:

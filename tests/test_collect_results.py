@@ -95,3 +95,34 @@ def test_make_arms_requires_strata_and_skips_rainfall_by_default(tmp_path):
     names = sorted(os.listdir(tmp_path))
     assert not any("rainfall" in n or "baseline" in n for n in names)
     assert "coupling_low.json" in names
+
+
+# --- D-5.6: validation-only baselines -------------------------------------------
+
+def _manifest(root, tag, sha):
+    d = os.path.join(root, tag)
+    os.makedirs(d)
+    with open(os.path.join(d, "MANIFEST.json"), "w") as f:
+        json.dump({"files": {"run/ckpt_final.pt": {"sha256": sha}}}, f)
+
+
+def test_headline_status_marks_validation_baselines(tmp_path):
+    _manifest(str(tmp_path / "b"), "baseline-v1", "abc")
+    shas = C.validation_only_shas(str(tmp_path / "b"))
+    assert C.headline_status({"baseline_sha256": "abc"}, shas) == "validation_only:baseline-v1"
+    assert C.headline_status({"baseline_sha256": "def"}, shas) == "eligible"
+    assert C.headline_status({}, shas) == "unknown"
+
+
+def test_load_runs_attaches_headline_status(tmp_path):
+    _manifest(str(tmp_path / "b"), "baseline-v1", "abc")
+    _run(tmp_path, "ssr_v1", baseline_sha256="abc")
+    _run(tmp_path, "ssr_prod", baseline_sha256="fff")
+    rows = {os.path.basename(r["dir"]): r["headline"]
+            for r in C.load_runs(str(tmp_path / "ssr*"), str(tmp_path / "b"))}
+    assert rows == {"ssr_v1": "validation_only:baseline-v1", "ssr_prod": "eligible"}
+
+
+def test_the_repo_manifest_identifies_baseline_v1():
+    shas = C.validation_only_shas("baselines")
+    assert "0a193d83f3d87da53ac606742a952b041bcf27a0d94408f2314326180e67a53f" in shas

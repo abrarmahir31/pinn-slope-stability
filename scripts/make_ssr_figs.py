@@ -142,6 +142,22 @@ def fig12(rows, out):
 FIGS = {"fig8": fig8, "fig10": fig10, "fig11": fig11, "fig12": fig12}
 
 
+def stamp_if_not_headline(path, rows):
+    """Mark a figure drawn from any non-headline run (D-5.6), so a validation
+    figure cannot be mistaken for a result."""
+    bad = sorted({r.get("headline", "unknown") for r in rows} - {"eligible"})
+    if not bad or not os.path.exists(path):
+        return False
+    img = plt.imread(path)
+    fig = plt.figure(figsize=(img.shape[1] / 200, img.shape[0] / 200), dpi=200)
+    fig.figimage(img)
+    fig.text(0.5, 0.5, "VALIDATION ONLY - " + ", ".join(bad), ha="center",
+             va="center", fontsize=22, color="red", alpha=0.35, rotation=20)
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
+    return True
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -157,7 +173,9 @@ def main(argv=None):
         path = os.path.join(a.out, f"{name}.png")
         try:
             n = FIGS[name](rows, path)
-            print(f"wrote {path}  ({n} series/groups)")
+            stamped = stamp_if_not_headline(path, rows)
+            print(f"wrote {path}  ({n} series/groups)"
+                  + ("  [stamped VALIDATION ONLY]" if stamped else ""))
         except NoData as e:
             skipped += 1
             print(f"SKIPPED {e}")

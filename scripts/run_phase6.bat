@@ -7,14 +7,15 @@ REM   scripts\run_phase6.bat npde        N_PDE levels 5000 and 20000
 REM   scripts\run_phase6.bat draws       collocation-draw replicates
 REM   scripts\run_phase6.bat figs        collect results, Figs 11 12
 REM
-REM ===== DECISIONS - copy the Phase 5 values, then set the rest. =====
-set BASELINE=CHANGE_ME
+REM ===== D-5.3 and D-5.5 are filled in. The rest stay open until Phase 5 is done. =====
+set BASELINE=runs\ansatz\exp_seed7\ckpt_final.pt
 set YIELD_NORM=CHANGE_ME
-set ADM_METRIC=CHANGE_ME
-set ADM_DROP=CHANGE_ME
-set SIG3_LO=CHANGE_ME
-set SIG3_HI=CHANGE_ME
-set W_REPORT=CHANGE_ME
+set ADM_METRIC=min_tag
+set ADM_DROP=0.15
+set SIG3_LO=0
+set SIG3_HI=179000
+REM D-5.8: w_yield 1.0, conditional on the Phase 5 plateau holding
+set W_REPORT=1
 set KS_STRATUM=CHANGE_ME
 set GSI_STRATUM=CHANGE_ME
 REM ===========================================================================

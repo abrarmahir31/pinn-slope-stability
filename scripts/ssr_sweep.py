@@ -37,11 +37,11 @@ resume that restores the warm-start chain, non-finite losses reported as a
 training failure rather than counted as slope failure, `--overrides` for the
 Phase 6 arms, and every threshold written to result.json.
 
-STILL DECISIONS, recorded but not settled here: soft constraint vs return
-mapping (this is the soft arm); MC applies the bedding residual pair
-c = 4.4 kPa, phi = 15.4 deg to EVERY stratum including Tm; the yield check is
-on total stress with the Bishop increment, as loss.L_yield docstring states;
-`--plateau-factor` and `--disp-factor` keep their Day-39 defaults.
+DECISIONS (DECISIONS.md, Step 5): D-5.1 soft constraint; D-5.2 MC strength
+via --mc-strength; D-5.3 GHB fit range; D-5.4 D = 1; D-5.5 admissible metric.
+Still open: the yield check is on total stress with the Bishop increment
+(loss.L_yield docstring); `--plateau-factor` and `--disp-factor` keep their
+Day-39 defaults.
 
 FAILURE SIGNATURE: all three of loss plateau, displacement jump, and a DROP in
 the chosen admissible metric relative to the SRF-start reference.
@@ -118,11 +118,26 @@ def parse(argv=None):
     g = ap.add_argument_group("failure detection")
     g.add_argument("--plateau-factor", type=float, default=20.0)
     g.add_argument("--disp-factor", type=float, default=10.0)
-    g.add_argument("--admissible-metric", required=True,
-                   help="area | min_tag | tag:<Mk|Mk_d|Tm>")
+    g.add_argument("--admissible-metric", default="min_tag",
+                   help="PRIMARY metric used by _has_failed. D-5.5: min_tag "
+                        "(tracks whichever stratum yields first). Also area, "
+                        "tag:<Mk|Mk_d|Tm>.")
+    g.add_argument("--admissible-secondary", default="tag:Mk_d",
+                   help="SECONDARY metric, recorded at every SRF and in "
+                        "result.json but NOT used to detect failure (D-5.5). "
+                        "'none' to omit.")
     g.add_argument("--admissible-drop", type=float, required=True,
                    help="failure needs the metric to FALL by more than this "
                         "(fraction, e.g. 0.10) below its SRF-start value")
+
+    g = ap.add_argument_group("MC -- required for --criterion MC (D-5.2)")
+    g.add_argument("--mc-strength", choices=("rockmass", "bedding"), default=None,
+                   help="rockmass: Hoek (2002) equivalents of each stratum's "
+                        "own GHB envelope over 0..--mc-sig3max (D-5.2 option "
+                        "a). bedding: the residual pair c=4.4 kPa, phi=15.4 "
+                        "on every point -- rejected as a continuum strength "
+                        "by D-5.2, kept only to reproduce that evidence.")
+    g.add_argument("--mc-sig3max", type=float, default=None, help="Pa")
 
     g = ap.add_argument_group("GHB -- required for --criterion GHB")
     g.add_argument("--sig3-lo", type=float, default=None, help="Pa")
@@ -140,8 +155,19 @@ def parse(argv=None):
             ap.error("--sig3-hi must exceed --sig3-lo")
     elif a.sig3_lo is not None or a.sig3_hi is not None:
         ap.error("--sig3-lo/--sig3-hi only apply to --criterion GHB")
+    if a.criterion == "MC":
+        if a.mc_strength is None:
+            ap.error("--criterion MC needs --mc-strength (D-5.2)")
+        if a.mc_strength == "rockmass" and not (a.mc_sig3max or 0) > 0:
+            ap.error("--mc-strength rockmass needs --mc-sig3max > 0 (Pa)")
+        if a.mc_strength == "bedding" and a.mc_sig3max is not None:
+            ap.error("--mc-sig3max only applies to --mc-strength rockmass")
+    elif a.mc_strength is not None or a.mc_sig3max is not None:
+        ap.error("--mc-strength/--mc-sig3max only apply to --criterion MC")
     try:
         _parse_metric(a.admissible_metric)
+        if a.admissible_secondary != "none":
+            _parse_metric(a.admissible_secondary)
     except ValueError as e:
         ap.error(str(e))
     if not 0.0 < a.admissible_drop < 1.0:
@@ -169,12 +195,27 @@ def _sig3_range(a):
     return (float(a.sig3_lo), float(a.sig3_hi))
 
 
+def _mc_base(a, mat):
+    """Unreduced MC strength for one material under D-5.2."""
+    if a.mc_strength == "bedding":
+        return MC_DESIGN
+    if a.mc_strength == "rockmass":
+        if not (a.mc_sig3max or 0) > 0:
+            raise ValueError("rockmass MC needs mc_sig3max > 0")
+        return st.ghb_equivalent_mc(
+            st.GHBParams(sigma_ci=mat.sigma_ci, m_b=mat.m_b, s=mat.s, a=mat.a),
+            a.mc_sig3max)
+    raise ValueError(f"mc_strength must be rockmass or bedding, "
+                     f"got {a.mc_strength!r}")
+
+
 def _yield_params(a, mats, srf):
-    """Reduced strength parameters per tag. MC uses the design pair for every
-    tag (see module docstring); GHB reduces each material's own set."""
+    """Reduced strength parameters per tag. MC reduces the D-5.2 base
+    (rock-mass equivalents, or the bedding pair); GHB reduces each material's
+    own set over the D-5.3 fit range."""
     return {tag: pl.reduced_material_params(
                 mat, a.criterion, srf,
-                mc_base=MC_DESIGN if a.criterion == "MC" else None,
+                mc_base=_mc_base(a, mat) if a.criterion == "MC" else None,
                 sig3_range=_sig3_range(a))
             for tag, mat in mats.items()}
 
@@ -196,14 +237,20 @@ def _admissible_metric(adm: dict, shares: dict, spec: str) -> float:
     return float(adm[tag])
 
 
-def _diagnostics(net, coll, mats, yparams, criterion, spec, s=SCALES):
-    """Admissible fractions from `loss.L_yield` -- the penalty's own stress."""
+def _diagnostics(net, coll, mats, yparams, criterion, spec, s=SCALES,
+                 secondary=None):
+    """Admissible fractions from `loss.L_yield` -- the penalty's own stress.
+    `admissible` is the primary metric; `admissible_secondary` is recorded
+    only (D-5.5)."""
     yld, parts = L_yield(net, coll, mats, yparams, criterion=criterion,
                          s=s, per_tag=True)
     adm = {k[len("admissible_"):]: float(v) for k, v in parts.items()
            if k.startswith("admissible_")}
     shares = _area_shares(coll)
+    out_sec = (None if secondary in (None, "none")
+               else _admissible_metric(adm, shares, secondary))
     return {"admissible": _admissible_metric(adm, shares, spec),
+            "admissible_secondary": out_sec,
             "admissible_by_tag": adm, "area_shares": shares,
             "pde_yield": float(yld.detach()),
             "pde_yield_by_tag": {k[len("pde_yield_"):]: float(v)
@@ -292,6 +339,15 @@ def _kc_name(ckpt_cfg: dict, overrides: dict) -> str:
 def _disp_norm(net, coll):
     u, v = uv_of(net(coll.x, coll.z, coll.t))
     return float(torch.sqrt(torch.mean(u ** 2 + v ** 2)).item())
+
+
+def _sha256(path, chunk=1 << 20):
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for b in iter(lambda: f.read(chunk), b""):
+            h.update(b)
+    return h.hexdigest()
 
 
 def _git_commit():
@@ -385,7 +441,8 @@ def run(a):
                    "sec": time.time() - t0}
             if finite:
                 rec.update(_diagnostics(net, coll, mats, yp, a.criterion,
-                                        a.admissible_metric))
+                                        a.admissible_metric,
+                                        secondary=a.admissible_secondary))
             torch.save({"net": net.state_dict(), "srf": srf, "cfg": cfg,
                         "sweep": vars(a)},
                        os.path.join(state_dir, f"srf_{key:.6f}.pt"))
@@ -393,9 +450,12 @@ def run(a):
                 log.write(json.dumps(rec) + "\n")
             done[key] = rec
             adm = rec.get("admissible", float("nan"))
+            sec = rec.get("admissible_secondary")
             by = "  ".join(f"{t}={v:.3f}" for t, v in
                            sorted(rec.get("admissible_by_tag", {}).items()))
             print(f"  SRF {srf:6.3f}  L={rec['total']:.4e}  adm={adm:.3f} "
+                  + ("" if sec is None else f"({a.admissible_secondary}={sec:.3f}) ")
+                  + 
                   f"[{by}]  |u|={rec['disp']:.3e}  {rec['sec']:.0f}s")
             if not finite:
                 raise FloatingPointError(
@@ -432,6 +492,11 @@ def run(a):
                   "yield_norm": a.yield_norm, "yield_scale": y_scale,
                   "L_yield_baseline": y0,
                   "admissible_metric": a.admissible_metric,
+                  "admissible_metric_role": "primary: used by _has_failed",
+                  "admissible_secondary": a.admissible_secondary,
+                  "admissible_secondary_role": "recorded only, not used "
+                                               "to detect failure (D-5.5)",
+                  "admissible_secondary_ref": ref.get("admissible_secondary"),
                   "admissible_drop": a.admissible_drop,
                   "admissible_ref": ref["admissible"],
                   "admissible_ref_by_tag": ref.get("admissible_by_tag"),
@@ -439,12 +504,20 @@ def run(a):
                   "plateau_factor": a.plateau_factor,
                   "disp_factor": a.disp_factor, "cold_start": a.cold_start,
                   "epochs": epochs, "lr": a.lr, "sig3_range": _sig3_range(a),
-                  "mc_design": ([MC_DESIGN.c, math.degrees(MC_DESIGN.phi)]
-                                if a.criterion == "MC" else None),
+                  "mc_strength": a.mc_strength,
+                  "mc_sig3max": a.mc_sig3max,
+                  "mc_base_by_tag": ({t: [_mc_base(a, m).c,
+                                          math.degrees(_mc_base(a, m).phi)]
+                                      for t, m in mats.items()}
+                                     if a.criterion == "MC" else None),
                   "kc": kc_name, "overrides": overrides,
                   "arm": (arms.load_arm_file(a.overrides) if a.overrides else None),
                   "sigma0_consistent": arms.sigma0_consistent(overrides),
-                  "baseline": a.baseline, "n_pde": targs.n_pde,
+                  "baseline": a.baseline,
+                  "baseline_sha256": _sha256(a.baseline),
+                  "baseline_step": ckpt.get("step"),
+                  "baseline_epochs": cfg.get("epochs"),
+                  "n_pde": targs.n_pde,
                   "sampling_seed": targs.seed, "smoke": a.smoke,
                   "git_commit": _git_commit()}
 

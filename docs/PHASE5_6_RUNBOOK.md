@@ -8,6 +8,15 @@ Every FOS, figure and table comes from your runs.
 
 ## 1. Decisions — none has a default in the code
 
+**Day 41 status.** Recorded in `DECISIONS.md` Step 5 (D-5.1 to D-5.8):
+soft constraint; MC-SSR by rock-mass equivalents over 0–400 kPa (bedding
+pair rejected, joint model not selected for schedule); GHB fit 0–179 kPa;
+D = 1; `min_tag` primary with `tag:Mk_d` secondary; drop 0.15 (confirm on the
+GPU smoke); `baseline-v1` for validation, production baseline with `cap` and
+500 L-BFGS iterations; Fig 9 at t = 30 d; reported `w_yield` 1.0 if the
+plateau holds. **Still open:** `YIELD_NORM` (`raw` or `ref`), the production
+`SEED` (cap failed on 20250812 in D-A.1), and the Fig 9 SRF state.
+
 | # | Decision | Where it is set | Evidence to bring to the supervisor |
 |---|---|---|---|
 | D1 | Soft constraint (current) vs return mapping | method choice; `ssr_sweep.py` is the soft arm | `STEP5_STATUS.md` §"What the sweep would need"; FOS depends on `w_yield` |
@@ -105,6 +114,28 @@ decision.
 
 ---
 
+### 2.7 Day 41 CPU preview with the decided settings
+
+GHB σ₃ 0–179 kPa, `min_tag` (= Mk_d throughout), `w_yield` 1, 50 epochs,
+N_PDE 400, CPU. **Undertrained; trajectories only, not values to set
+thresholds from.** Source: DECISIONS.md D-5.5 discussion.
+
+| SRF | GHB `ref` | GHB `raw` | MC rock-mass (a), σ₃max 179 kPa, `ref` |
+|---|---|---|---|
+| 1.00 | 0.971 | 0.800 | 0.986 |
+| 1.05 | 0.936 | 0.736 | 0.914 |
+| 1.10 | 0.929 | 0.671 | 0.914 |
+| 1.15 | 0.907 | 0.679 | 0.900 |
+
+- `ref` divides the yield term by its baseline value (0.026), so
+  `w_yield` = 1 under `ref` is ~38× stronger than under `raw`; the 0.3/1/3
+  plateau probes different penalty strengths under each.
+- Rock-mass MC at σ₃max 179 kPa: Mk c 70.2 kPa φ 32.8°, Mk_d c 22.0 kPa
+  φ 18.0°, Tm c 345.6 kPa φ 56.3°. It starts admissible and falls with SRF,
+  so option (a) is workable, unlike the bedding pair.
+- Mk and Tm stayed at 1.000 in all three.
+- The sweep resumed correctly from saved states after a forced interruption.
+
 ## 3. Order of operations
 
 Wall-clock figures are estimates. Read `sec` per SRF from the smoke log and
@@ -116,10 +147,12 @@ rescale. A sweep is roughly 8–13 SRF evaluations × 1,500 epochs.
 | 1 | `python -m pytest -q` | expect the count in the commit message |
 | 2 | `python scripts\sig3_range.py <ckpt> --tags Mk_d` | D3 input |
 | 3 | fill DECISIONS in `scripts\run_phase5.bat` | aborts until done |
-| 4 | `scripts\run_phase5.bat smoke` | first GPU execution; read per-stratum `adm` |
-| 5 | `scripts\run_phase5.bat sweeps` | 3 GHB (+3 MC if D2 allows) |
-| 6 | `scripts\run_phase5.bat cold` | cold-start check at w = 1 |
-| 7 | `scripts\run_phase5.bat figs` | `docs\results\fos_table.md`, Figs 8, 9, 10 |
+| 4 | `scripts\run_phase5.bat smoke` | runs GHB under `ref` and `raw`; choose `YIELD_NORM`, `ADM_DROP` from it. `smoke_mc` for D2 |
+| 5 | `scripts\run_phase5.bat sweeps` on `baseline-v1` | full-length validation sweeps; results marked `validation_only` |
+| 5a | `scripts\run_production_baseline.bat train`, `fig6`, `freeze` | D-5.6; ~16 h; set ANSATZ and LBFGS_EPOCHS first |
+| 5b | point `BASELINE` at `runs\prod_baseline_v2\ckpt_final.pt`; rerun `sweeps` | headline-eligible runs |
+| 6 | `scripts\run_phase5.bat cold` | cold-start check at w = 1, on the production baseline |
+| 7 | `scripts\run_phase5.bat figs` | `docs\results\fos_table.md` (headline column), Figs 8, 9, 10 |
 | 8 | choose `W_REPORT` from Fig 10; fill `run_phase6.bat` | D7, D9, D10 |
 | 9 | `scripts\run_phase6.bat arms` then `sweeps` | K_s, GSI, coupling arms |
 | 10 | `scripts\run_phase6.bat npde` | 5k and 20k; 10k is the step 5 run |

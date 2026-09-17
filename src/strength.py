@@ -370,3 +370,26 @@ def reduced_params(criterion: str, base, srf: float, **kw):
     if criterion == "GHB":
         return reduce_ghb(base, srf, **kw)
     raise ValueError(f"unknown criterion {criterion!r}, expected 'MC' or 'GHB'")
+
+# ---------------------------------------------------------------------------
+# 6. Rock-mass MC equivalents (Day 41, D-5.2 option a)
+# ---------------------------------------------------------------------------
+def ghb_equivalent_mc(p: GHBParams, sig3max: float) -> MCParams:
+    """Hoek, Carranza-Torres & Corkum (2002) equivalent c, phi of the GHB
+    envelope `p` over 0 <= sig3 <= sig3max (Pa). `p` already carries D through
+    m_b and s. Reproduces the Phase-1 dataset's `hoek_brown_mc_equivalents`
+    to 0.03% (tests/test_decision_evidence.py).
+
+    These are ROCK-MASS strengths, far stronger than the bedding residual
+    pair; which one the MC sweep reduces is D-5.2, not this function.
+    """
+    if not sig3max > 0:
+        raise ValueError("sig3max must be > 0 Pa")
+    s3n = sig3max / p.sigma_ci
+    a, mb, s = p.a, p.m_b, p.s
+    k = 6.0 * a * mb * (s + mb * s3n) ** (a - 1.0)
+    d = (1.0 + a) * (2.0 + a)
+    phi = math.asin(k / (2.0 * d + k))
+    c = (p.sigma_ci * ((1.0 + 2.0 * a) * s + (1.0 - a) * mb * s3n)
+         * (s + mb * s3n) ** (a - 1.0) / (d * math.sqrt(1.0 + k / d)))
+    return MCParams(c=c, phi=phi)

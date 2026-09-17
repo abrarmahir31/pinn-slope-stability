@@ -30,6 +30,7 @@ REQ = ["--w-yield", "1", "--yield-norm", "raw", "--admissible-metric", "area",
 
 def _args(**kw):
     base = dict(criterion="GHB", sig3_lo=0.0, sig3_hi=8.5e5,
+                mc_strength=None, mc_sig3max=None,
                 plateau_factor=20.0, disp_factor=10.0, admissible_drop=0.10,
                 admissible_metric="area")
     base.update(kw)
@@ -51,7 +52,43 @@ def test_parse_refuses_ghb_without_a_sig3_range():
 def test_parse_refuses_a_sig3_range_for_mc():
     with pytest.raises(SystemExit):
         S.parse(["--criterion", "MC", "--baseline", "x", "--out", "o", *REQ,
+                 "--mc-strength", "rockmass", "--mc-sig3max", "1.79e5",
                  "--sig3-lo", "0", "--sig3-hi", "1e5"])
+
+
+def test_parse_refuses_mc_without_a_strength_choice():
+    with pytest.raises(SystemExit):
+        S.parse(["--criterion", "MC", "--baseline", "x", "--out", "o", *REQ])
+
+
+def test_parse_refuses_rockmass_mc_without_sig3max():
+    with pytest.raises(SystemExit):
+        S.parse(["--criterion", "MC", "--baseline", "x", "--out", "o", *REQ,
+                 "--mc-strength", "rockmass"])
+
+
+def test_parse_accepts_a_complete_rockmass_mc_command():
+    a = S.parse(["--criterion", "MC", "--baseline", "x", "--out", "o", *REQ,
+                 "--mc-strength", "rockmass", "--mc-sig3max", "1.79e5"])
+    assert a.mc_sig3max == 1.79e5
+
+
+def test_yield_params_rockmass_mc_are_per_material_hoek2002():
+    mats = load_materials()
+    a = _args(criterion="MC", mc_strength="rockmass", mc_sig3max=1.79e5)
+    yp = S._yield_params(a, mats, 1.0)
+    for t, m in mats.items():
+        eq = st.ghb_equivalent_mc(st.GHBParams(sigma_ci=m.sigma_ci, m_b=m.m_b,
+                                               s=m.s, a=m.a), 1.79e5)
+        assert yp[t].c == pytest.approx(eq.c)
+        assert yp[t].phi == pytest.approx(eq.phi)
+    assert yp["Tm"].c > yp["Mk_d"].c            # negative control: not one pair
+    assert yp["Mk_d"].c > S.MC_DESIGN.c
+
+
+def test_yield_params_mc_refuses_an_unset_strength():
+    with pytest.raises(ValueError):
+        S._yield_params(_args(criterion="MC"), load_materials(), 1.0)
 
 
 def test_parse_accepts_a_complete_ghb_command():
@@ -70,7 +107,7 @@ def test_sig3_range_is_none_for_mc_and_refuses_missing_for_ghb():
 
 def test_yield_params_mc_reduces_the_design_pair_for_every_tag():
     mats = load_materials()
-    yp = S._yield_params(_args(criterion="MC"), mats, 1.5)
+    yp = S._yield_params(_args(criterion="MC", mc_strength="bedding"), mats, 1.5)
     assert set(yp) == set(mats)
     exp = st.reduce_mc(S.MC_DESIGN, 1.5)
     for p in yp.values():
@@ -236,6 +273,8 @@ def test_smoke_run_end_to_end(tmp_path, tiny, criterion):
             "--device", "cpu", "--smoke", *REQ]
     if criterion == "GHB":
         argv += ["--sig3-lo", "0", "--sig3-hi", "8.5e5"]
+    else:
+        argv += ["--mc-strength", "rockmass", "--mc-sig3max", "1.79e5"]
     res = S.run(S.parse(argv))
 
     recs = [json.loads(l) for l in open(out / "sweep.jsonl")]
@@ -247,8 +286,13 @@ def test_smoke_run_end_to_end(tmp_path, tiny, criterion):
         or res["sig3_range"] == ((0.0, 8.5e5) if criterion == "GHB" else None)
     saved = json.load(open(out / "result.json"))
     for k in ("admissible_metric", "admissible_drop", "w_yield", "yield_norm",
-              "plateau_factor", "disp_factor", "status"):
+              "plateau_factor", "disp_factor", "status",
+              "admissible_secondary", "admissible_secondary_ref",
+              "baseline_sha256", "baseline_step"):
         assert k in saved
+    assert saved["admissible_metric_role"].startswith("primary")
+    assert "not used" in saved["admissible_secondary_role"]
+    assert all("admissible_secondary" in r for r in recs)
     # Resume: a second invocation re-uses every point and adds none.
     S.run(S.parse(argv))
     assert len(open(out / "sweep.jsonl").readlines()) == 4
@@ -271,3 +315,37 @@ def test_reachable_drop_for_a_single_marl_tag_is_its_full_value():
     sh = {"Mk": 0.0302, "Mk_d": 0.0980, "Tm": 0.8719}
     assert S.reachable_drop(adm, sh, "tag:Mk_d")["reachable_without_dominant"] \
         == pytest.approx(0.389)
+
+
+# --- D-5.5: primary and secondary metric ---------------------------------------
+
+def test_parse_defaults_follow_d55():
+    a = S.parse(["--criterion", "GHB", "--baseline", "x", "--out", "o",
+                 "--w-yield", "1", "--yield-norm", "ref",
+                 "--admissible-drop", "0.1", "--sig3-lo", "0", "--sig3-hi", "1.79e5"])
+    assert a.admissible_metric == "min_tag"
+    assert a.admissible_secondary == "tag:Mk_d"
+
+
+def test_parse_rejects_an_invalid_secondary_and_accepts_none():
+    base = ["--criterion", "GHB", "--baseline", "x", "--out", "o", *REQ,
+            "--sig3-lo", "0", "--sig3-hi", "1.79e5"]
+    with pytest.raises(SystemExit):
+        S.parse(base + ["--admissible-secondary", "tag:coal"])
+    assert S.parse(base + ["--admissible-secondary", "none"]).admissible_secondary == "none"
+
+
+def test_diagnostics_record_the_secondary_without_changing_the_primary(tiny):
+    t, net, loss_fn, coll = tiny
+    mats = loss_fn["mats"]
+    yp = S._yield_params(_args(), mats, 1.0)
+    d1 = S._diagnostics(net, coll, mats, yp, "GHB", "min_tag", secondary="tag:Mk_d")
+    d0 = S._diagnostics(net, coll, mats, yp, "GHB", "min_tag", secondary=None)
+    assert d1["admissible"] == d0["admissible"]
+    assert d1["admissible_secondary"] == pytest.approx(d1["admissible_by_tag"]["Mk_d"])
+    assert d0["admissible_secondary"] is None
+
+
+def test_has_failed_ignores_the_secondary_metric():
+    rec = {**FAIL, "admissible": REF["admissible"], "admissible_secondary": 0.0}
+    assert S._has_failed(rec, {**REF, "admissible_secondary": 1.0}, _args()) is False

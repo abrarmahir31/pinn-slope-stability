@@ -2,6 +2,11 @@
 
 Abrar Mahir · PINN hydro-mechanical SSR, Işıkdere Section 5 · Day 41
 
+**Outcome (Day 41):** recorded in `DECISIONS.md` as D-5.1 to D-5.5. Soft
+constraint; MC-SSR by rock-mass equivalents or not at all (bedding pair
+rejected); GHB fit range 0–179 kPa; D = 1 retained; admissible metric
+`min_tag`. Open: (a) vs (c), `--yield-norm`, the drop threshold.
+
 **What this is.** Five decisions block the factor-of-safety sweeps. The code
 for all options exists and is tested (530+ tests). The sweeps will not run
 until each is made. Every number below is a **pointwise** check of the frozen

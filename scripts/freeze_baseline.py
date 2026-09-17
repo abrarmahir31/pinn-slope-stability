@@ -101,6 +101,13 @@ def main(argv=None):
     ap.add_argument("--extra", nargs="*", default=[],
                     help="additional files to archive (figures, artifacts)")
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--accept-elastic-overstress", action="store_true",
+                    help="override ONLY the fig6 elastic-check gate, and record "
+                         "it. D-5.4 keeps D = 1, under which ~19%% of points "
+                         "(5.4%% of area) are pointwise below GHB FS = 1 by "
+                         "construction; Day 40 showed that is not a boundary "
+                         "artefact and D-5.1's soft constraint starts from it. "
+                         "Every other gate stays strict.")
     ap.add_argument("--skip-tests", action="store_true")
     a = ap.parse_args(argv)
 
@@ -166,7 +173,12 @@ def main(argv=None):
         frac = json.load(open(ec)).get("frac_yielded_domain")
         if frac is not None:
             print(f"\nelastic check: {100*frac:.3f}% of points below FS = 1")
-            if not gate(frac < 0.01,
+            if a.accept_elastic_overstress and frac >= 0.01:
+                overrides.append(
+                    f"elastic check accepted under D-5.4: {100*frac:.2f}% of "
+                    f"points below FS=1 (unweighted); gate not applied")
+                print("  accepted under D-5.4 (--accept-elastic-overstress)")
+            elif not gate(frac < 0.01,
                         f"baseline is already failing at SRF = 1 "
                         f"({100*frac:.2f}% below FS=1); an SSR sweep has "
                         f"nothing to reduce"):
@@ -201,7 +213,7 @@ def main(argv=None):
 
     man = {
         "tag": tag,
-        "frozen_utc": datetime.datetime.utcnow().isoformat(timespec="seconds"),
+        "frozen_utc": datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
         "run_dir": a.run.replace("\\", "/"),
         "checkpoint": a.ckpt,
         "step": d.get("step"),

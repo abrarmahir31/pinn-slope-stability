@@ -111,3 +111,12 @@ def test_fig9_reports_localisation_relative_to_the_sweep_start(tiny_state, tmp_p
              "--nz", "16", "--out", str(tmp_path / "f.png")])
     s = json.load(open(tmp_path / "f.json"))
     assert s[0]["li_ratio_vs_start"] == pytest.approx(1.0)
+
+
+def test_figures_from_non_headline_runs_are_stamped(tmp_path):
+    p = tmp_path / "f.png"
+    for name, rows, expected in (("val", [{"headline": "validation_only:baseline-v1"}], True),
+                                 ("ok", [{"headline": "eligible"}], False)):
+        import matplotlib.pyplot as plt
+        fig = plt.figure(); plt.plot([0, 1]); fig.savefig(p); plt.close(fig)
+        assert F.stamp_if_not_headline(str(p), rows) is expected, name
