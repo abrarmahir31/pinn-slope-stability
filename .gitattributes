@@ -6,3 +6,4 @@
 *.docx binary
 *.pdf binary
 *.zip binary
+*.bat text eol=crlf
