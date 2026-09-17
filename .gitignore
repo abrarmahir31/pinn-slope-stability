@@ -12,18 +12,16 @@ __pycache__/
 *.pdf
 
 # extracted figure rasters (regenerable from the PDF)
-step21_geometry/figures/native_*
-step21_geometry/figures/page*
-step21_geometry/figures/grid_*
+phase3_geometry_bc_ic/figures/native_*
+phase3_geometry_bc_ic/figures/page*
+phase3_geometry_bc_ic/figures/grid_*
+phase3_geometry_bc_ic/figures/native_p*.jpeg
 __pycache__/
 *.pyc
 *.bak
 .pytest_cache/
-step21_geometry/figures/native_p*.jpeg
-src/step21_geometry/__pycache__/
-src/step21_geometry/ic_cache.npz
-src/step21_geometry/output/
-src/step21_geometry/figures/
+phase3_geometry_bc_ic/__pycache__/
+phase3_geometry_bc_ic/ic_cache.npz
 output/
 scratch_*.py
 *_cache.npz

@@ -33,9 +33,9 @@ from __future__ import annotations
 
 import torch
 
-from src.derivatives import as_inputs, grad
-from src.nondim import SCALES
-from src.residuals import SWCC, richards_residual, richards_residual_expanded
+from phase4_materials_and_residuals.derivatives import as_inputs, grad
+from phase4_materials_and_residuals.nondim import SCALES
+from phase4_materials_and_residuals.residuals import SWCC, richards_residual, richards_residual_expanded
 
 torch.set_default_dtype(torch.float64)
 

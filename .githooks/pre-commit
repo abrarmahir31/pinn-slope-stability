@@ -1,2 +1,2 @@
 #!/bin/sh
-python -m compileall -q src/ || exit 1
+python -m compileall -q phase1_data_extraction/ phase2_parameter_derivation/ phase3_geometry_bc_ic/ phase4_materials_and_residuals/ tests/ tools/ || exit 1
