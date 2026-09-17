@@ -1,9 +1,9 @@
 import pytest
 import torch
 
-from src.materials import load_materials, theta, Se, K, C_star
-from src.nondim import SCALES
-from src import properties as P
+from phase4_materials_and_residuals.materials import load_materials, theta, Se, K, C_star
+from phase4_materials_and_residuals.nondim import SCALES
+from phase4_materials_and_residuals import properties as P
 
 
 @pytest.fixture(scope="module")

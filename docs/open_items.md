@@ -45,9 +45,11 @@
   effective_stress_nd). Do not duplicate.
 - C_star convention: C(psi) returns C * H_ref (dimensionless).
 - theta_s := n0 per unit (0.427 Mk), overriding the literature 0.38.
-- [ ] step21_geometry/*.py use bare sibling imports (import geometry, import vg).
-      Only work when run from inside that dir. Needs sys.path shim or package
-      conversion before loss.py imports boundaries.py.
+- [x] step21_geometry/*.py use bare sibling imports (import geometry, import vg).
+      Only worked when run from inside that dir. Fixed by adding a sys.path
+      shim (own-directory insertion) to every script with a bare sibling
+      import, during the chronological repo reorganization into
+      phase1_data_extraction/ .. phase4_materials_and_residuals/.
 
 ## Step 3.2 (6 Aug) — conventions confirmed against code
 - CORRECTION to the 4 Aug entry: C_star = C_phys * H_ref / dtheta_ref, NOT
@@ -68,8 +70,8 @@
   in Pi_R_diff, and dropped dK/dpsi term - all three caught.
 
 ## Step 2.2 mechanical checks (8 Aug, found after repo import)
-- [ ] 13_mech_checks.py prints MECHANICAL CHECKS FAILED but exits 0.
-      Fix the exit code, or the && chain silently continues.
+- [x] 13_mech_checks.py prints MECHANICAL CHECKS FAILED but exits 0.
+      Fixed: now calls sys.exit(0 if ok else 1).
 - [ ] [FAIL] body force in Mk_d: -16900 N/m3. That IS Mk_d's gamma
       (16.9 kN/m3), so the assertion's expected value is wrong, not the
       code. Check whether it compares against rho_dry*g vs gamma_nat.

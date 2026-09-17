@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from src.config import NetConfig, BOUNDS, tiny, full
-from src.model import PINN
+from phase4_materials_and_residuals.config import NetConfig, BOUNDS, tiny, full
+from phase4_materials_and_residuals.model import PINN
 
 
 def make(cfg):
