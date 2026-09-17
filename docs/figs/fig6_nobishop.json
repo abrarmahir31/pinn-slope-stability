@@ -43,5 +43,105 @@
    "fs_p05": 2.4404212925231277,
    "frac_yielded": 0.0
   }
- ]
+ ],
+ "frac_yielded_domain_area_weighted": 0.04396141507936505,
+ "free_surface_mask_m": 5.0,
+ "frac_yielded_masked": 0.18748656202967104,
+ "frac_yielded_masked_area_weighted": 0.04255046526396768,
+ "masked_collapsed": false,
+ "per_unit_masked": [
+  {
+   "tag": "Mk",
+   "n_kept": 765,
+   "frac_yielded_masked": 0.0,
+   "area_share": 0.030158333333333332
+  },
+  {
+   "tag": "Mk_d",
+   "n_kept": 1488,
+   "frac_yielded_masked": 0.5860215053763441,
+   "area_share": 0.0979583333333333
+  },
+  {
+   "tag": "Tm",
+   "n_kept": 2398,
+   "frac_yielded_masked": 0.0,
+   "area_share": 0.8718833333333332
+  }
+ ],
+ "fs_below_1_by_nearest_segment": {
+  "cut_face": 165,
+  "bench": 136,
+  "natural_ground": 642
+ },
+ "mask_sweep": [
+  {
+   "mask_m": 0.0,
+   "n_kept": 6000,
+   "frac": 0.15716666666666668,
+   "frac_area_weighted": 0.04396141507936505
+  },
+  {
+   "mask_m": 1.0,
+   "n_kept": 5720,
+   "frac": 0.16363636363636364,
+   "frac_area_weighted": 0.04404144986879619
+  },
+  {
+   "mask_m": 2.0,
+   "n_kept": 5430,
+   "frac": 0.1705340699815838,
+   "frac_area_weighted": 0.04398743174347457
+  },
+  {
+   "mask_m": 3.0,
+   "n_kept": 5147,
+   "frac": 0.1754420050514863,
+   "frac_area_weighted": 0.043296703695988537
+  },
+  {
+   "mask_m": 4.0,
+   "n_kept": 4900,
+   "frac": 0.18,
+   "frac_area_weighted": 0.04265298231706369
+  },
+  {
+   "mask_m": 5.0,
+   "n_kept": 4651,
+   "frac": 0.18748656202967104,
+   "frac_area_weighted": 0.04255046526396768
+  },
+  {
+   "mask_m": 7.5,
+   "n_kept": 4141,
+   "frac": 0.19657087659985512,
+   "frac_area_weighted": 0.04056027119416692
+  },
+  {
+   "mask_m": 10.0,
+   "n_kept": 3694,
+   "frac": 0.19707634001082838,
+   "frac_area_weighted": 0.037101425071102555
+  },
+  {
+   "mask_m": 15.0,
+   "n_kept": 2975,
+   "frac": 0.15630252100840336,
+   "frac_area_weighted": 0.024781521048339826
+  },
+  {
+   "mask_m": 20.0,
+   "n_kept": 2447,
+   "frac": 0.06783816918675929,
+   "frac_area_weighted": 0.00928087252706697
+  }
+ ],
+ "tension": {
+  "n": 6000,
+  "n_fs_below_1": 943,
+  "n_sigma3_tensile": 143,
+  "n_fs_below_1_and_sigma3_tensile": 18,
+  "n_beyond_tensile_cutoff": 45,
+  "n_hidden_by_clip": 43
+ }
 }
