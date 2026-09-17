@@ -4,8 +4,9 @@ message, never written empty (--require turns a skip into an error).
     python scripts/make_ssr_figs.py --runs "runs/ssr*" --out docs/figs
 
   Fig 8   loss and admissible metric vs SRF, one line per run (baseline arm)
-  Fig 10  FOS vs w_yield per criterion -- the soft-constraint plateau --
-          with the LEM value from geometry.F_TARGETS for reference
+  Fig 10  FOS bars: LEM vs MC-PINN vs GHB-PINN at the reported w_yield,
+          error bars = range over the w_yield plateau (workbook definition)
+  Fig S1  FOS vs w_yield per criterion -- the D-5.1 plateau
   Fig 11  coupling arms (KC default / everywhere / off)
   Fig 12  tornado, from collect_results.tornado
 
@@ -74,10 +75,46 @@ def fig8(rows, out):
     return n
 
 
-def fig10(rows, out):
+def fig10(rows, out, w_report=1.0):
+    """Workbook Fig 10: FOS bars, LEM vs MC-PINN vs GHB-PINN, at the reported
+    w_yield (D-5.8), with the plateau's min-max over w_yield as the error bar.
+    Warm-start runs only; the LEM bar is labelled with its strength basis."""
+    groups = [g_ for g_ in C.plateau(rows) if not g_["cold_start"]]
+    if not groups:
+        raise NoData("fig10: no w_yield plateau groups with FOS")
+    bars = []
+    for grp in groups:
+        at = [f for w, f in grp["points"] if abs(w - w_report) < 1e-9]
+        if not at:
+            continue
+        bars.append((f"{grp['criterion']}-PINN", at[0], grp["min"], grp["max"]))
+    if not bars:
+        raise NoData(f"fig10: no FOS at w_yield = {w_report}")
+    bars.sort()
+    fig, ax = plt.subplots(figsize=(5.2, 4))
+    names = ["LEM\n(residual bedding)"] + [b[0] for b in bars]
+    vals = [g.F_TARGETS["initial_31deg"]] + [b[1] for b in bars]
+    lo = [0.0] + [b[1] - b[2] for b in bars]
+    hi = [0.0] + [b[3] - b[1] for b in bars]
+    ax.bar(range(len(vals)), vals, yerr=[lo, hi], capsize=5,
+           color=["0.6"] + [f"C{i}" for i in range(len(bars))])
+    ax.axhline(1.0, color="k", lw=0.6, ls=":")
+    ax.set_xticks(range(len(vals)), names)
+    ax.set(ylabel="FOS", title=f"FOS, w_yield = {w_report:g} "
+                               f"(bars: range over w_yield 0.3-3)")
+    for i, v in enumerate(vals):
+        ax.text(i, v, f"{v:.2f}", ha="center", va="bottom", fontsize=8)
+    fig.tight_layout()
+    fig.savefig(out, dpi=200)
+    plt.close(fig)
+    return len(bars)
+
+
+def figS1(rows, out):
+    """FOS vs w_yield: the D-5.1 plateau (supplementary, pending Fig 10 layout)."""
     groups = C.plateau(rows)
     if not groups:
-        raise NoData("fig10: no w_yield plateau groups (need >= 2 w_yield "
+        raise NoData("figS1: no w_yield plateau groups (need >= 2 w_yield "
                      "with FOS at matching settings)")
     fig, ax = plt.subplots(figsize=(5.5, 4))
     for grp in groups:
@@ -139,7 +176,8 @@ def fig12(rows, out):
     return len(groups)
 
 
-FIGS = {"fig8": fig8, "fig10": fig10, "fig11": fig11, "fig12": fig12}
+FIGS = {"fig8": fig8, "fig10": fig10, "figS1": figS1, "fig11": fig11,
+        "fig12": fig12}
 
 
 def stamp_if_not_headline(path, rows):

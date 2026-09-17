@@ -3,6 +3,8 @@ setlocal
 REM Phase 5 on the lab PC. Usage, from the repo root after go.bat:
 REM   scripts\run_phase5.bat smoke      GHB smoke under BOTH yield norms - evidence for YIELD_NORM and ADM_DROP
 REM   scripts\run_phase5.bat smoke_mc   MC rock-mass smoke - evidence for D-5.2 option a vs c
+REM   scripts\run_phase5.bat probe      full-length GHB at SRF 1.0 1.25 1.5 1.75 2.0, ref then raw
+REM                                     outputs runs\probe_* - outside runs\ssr*, never collected
 REM   scripts\run_phase5.bat sweeps     GHB, and MC if RUN_MC=yes, at w_yield 0.3 1 3
 REM   scripts\run_phase5.bat cold       cold-start check at w_yield 1
 REM   scripts\run_phase5.bat figs       collect results, Figs 8 10, Fig 9
@@ -54,6 +56,15 @@ if "%1"=="smoke" (
   exit /b 0
 )
 
+if "%1"=="probe" (
+  python scripts\ssr_sweep.py %GHB% %BASE% --w-yield 1 --yield-norm ref --admissible-drop %ADM_DROP% --srf-step 0.25 --srf-max 2.0 --out runs\probe_ghb_ref
+  if errorlevel 1 exit /b 1
+  python scripts\ssr_sweep.py %GHB% %BASE% --w-yield 1 --yield-norm raw --admissible-drop %ADM_DROP% --srf-step 0.25 --srf-max 2.0 --out runs\probe_ghb_raw
+  if errorlevel 1 exit /b 1
+  python scripts\progress.py runs\probe_ghb_ref runs\probe_ghb_raw
+  exit /b 0
+)
+
 if "%1"=="smoke_mc" (
   if "%MC_SIG3MAX%"=="CHANGE_ME" (echo DECISION MISSING: MC_SIG3MAX in Pa & exit /b 1)
   python scripts\ssr_sweep.py --criterion MC --mc-strength rockmass --mc-sig3max %MC_SIG3MAX% %BASE% %SMOKE% --yield-norm ref --out runs\ssr_smoke_mc_rockmass
@@ -94,7 +105,7 @@ if "%1"=="figs" (
   if "%FIG9_STATE%"=="CHANGE_ME" (echo DECISION MISSING: FIG9_STATE failed or stable & exit /b 1)
   python scripts\collect_results.py --runs "runs\ssr*" --out docs\results
   if errorlevel 1 exit /b 1
-  python scripts\make_ssr_figs.py --runs "runs\ssr*" --out docs\figs --only fig8,fig10
+  python scripts\make_ssr_figs.py --runs "runs\ssr*" --out docs\figs --only fig8,fig10,figS1
   if "%RUN_MC%"=="yes" (
     python scripts\make_fig9.py --run runs\ssr_ghb_w1 --run runs\ssr_mc_w1 --state %FIG9_STATE% --t %FIG9_T% --out docs\figs\fig9.png
   ) else (
@@ -103,5 +114,5 @@ if "%1"=="figs" (
   exit /b 0
 )
 
-echo Usage: scripts\run_phase5.bat smoke, smoke_mc, sweeps, cold or figs
+echo Usage: scripts\run_phase5.bat smoke, probe, smoke_mc, sweeps, cold or figs
 exit /b 1

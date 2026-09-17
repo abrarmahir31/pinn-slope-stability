@@ -47,6 +47,9 @@ def test_require_turns_a_skip_into_failure(tmp_path):
 def test_figures_write_with_data(tmp_path):
     for w, f in ((0.3, 1.1), (1.0, 1.2), (3.0, 1.25)):
         _run(tmp_path, f"ssr_w{w}", w_yield=w, fos=f)
+    for w, f in ((0.3, 1.0), (1.0, 1.05), (3.0, 1.08)):
+        _run(tmp_path, f"ssr_mc_w{w}", criterion="MC", w_yield=w, fos=f,
+             mc_strength="rockmass", mc_sig3max=4e5, sig3_range=None)
     _run(tmp_path, "ssr_off", fos=1.3, kc="off",
          arm={"factor": "coupling", "level": "low"})
     for lvl, f in (("low", 1.1), ("high", 1.3)):
@@ -120,3 +123,12 @@ def test_figures_from_non_headline_runs_are_stamped(tmp_path):
         import matplotlib.pyplot as plt
         fig = plt.figure(); plt.plot([0, 1]); fig.savefig(p); plt.close(fig)
         assert F.stamp_if_not_headline(str(p), rows) is expected, name
+
+
+def test_fig10_bars_need_the_reported_w_yield(tmp_path):
+    for w, f in ((0.3, 1.1), (3.0, 1.25)):
+        _run(tmp_path, f"ssr_w{w}", w_yield=w, fos=f)
+    rows = C.load_runs(str(tmp_path / "ssr*"))
+    with pytest.raises(F.NoData):
+        F.fig10(rows, str(tmp_path / "f.png"), w_report=1.0)
+    assert F.fig10(rows, str(tmp_path / "f.png"), w_report=0.3) == 1

@@ -794,11 +794,121 @@ counterpart in the Section 5 domain, so the reason recorded is the end of the
 not by itself show FOS independence; the Fig 10 spread across all three does.
 If the spread is large, 1.0 is not reportable as-is.
 
-### Still open after Day 41
+## Open issues register (Day 42)
 
-| item | needed for | note |
-|---|---|---|
-| `--yield-norm` | all sweeps | only `raw` or `ref` exist; "1e-3 / 1e-4" given in the second ruling is not one of them |
-| SEED for the production baseline | D-5.7 | cap failed on 20250812 (D-A.1) |
-| Fig 9 SRF state, `failed` or `stable` | Fig 9 | distinct from t = 30 d |
-| confirm `--admissible-drop 0.15` | full sweeps | against GPU smoke trajectories |
+Everything unresolved across Steps 5–6, including items raised in chat and
+docs but never recorded here. **Nothing in this section is a decision.** When
+one is made, write it as a D-5.x entry and mark the row closed. IDs are
+stable; do not renumber. `docs/open_items.md` predates this register and
+covers Steps 1–4.
+
+Status: ⛔ blocks GPU work or a figure · ◐ affects reporting · ○ housekeeping
+
+### Detector and sweep settings
+
+**O-1 ⛔ `--yield-norm`: `raw` or `ref`.** Blocks every sweep.
+GPU smoke (baseline-v1, N_PDE 10,000): L_yield on the baseline is 0.450, so
+`ref` is ~2.2× stronger than `raw` at `w_yield` = 1 (the earlier "38×" came
+from a 400-point CPU preview and is withdrawn). 4-step smoke, Mk_d admissible:
+`ref` 0.969→0.954, `raw` 0.948→0.929. The `ref` scale depends on N_PDE, so
+under `ref` the Phase 6 N_PDE arms each run at a different effective penalty.
+Not valid: "1e-3 / 1e-4" (not a mode that exists).
+
+**O-2 ⛔ `--admissible-drop` 0.15, or the drop condition itself.** Blocks any
+FOS. Full-length probe `probe_ghb_ref` (baseline-v1, GHB 0–179 kPa, `ref`,
+`w_yield` 1, 1,500 epochs/SRF): min_tag 0.972, 0.950, 0.897, 0.838, 0.846 at
+SRF 1.0–2.0. Loss ratio reached 23.8 (1.75) and 33.2 (2.0); displacement
+ratio 10.3 at 2.0; the largest drop, 0.134, never exceeded 0.15, so no failure
+was declared. Admissibility stalled near 0.84 as the penalty pulled stress
+back. Risk: if the drop condition controls when failure is declared, FOS
+could rise with `w_yield` because of the detector, not the physics, which
+would defeat the D-5.1 plateau. Options: keep 0.15; lower it; redefine it (for
+example, a step-to-step drop or a rate); or let loss plus displacement decide.
+Pending: `probe_ghb_raw`.
+
+**O-7 ⛔ `--plateau-factor` 20 and `--disp-factor` 10 are inherited,
+uncalibrated values.** They decide the FOS jointly with O-2. Probe: the
+displacement condition was only just met at SRF 2.0 (10.3 against 10).
+Record them as decisions or change them, together with O-2.
+
+**O-8 ◐ SRF step and warm-start bias.** Default `--srf-step 0.05` needs ~20
+evaluations to reach SRF 2.0 (~6 h per sweep); the probe used 0.25 (~10
+evaluations with bisection, ~2.7 h). Larger warm-start jumps are what
+`run_phase5.bat cold` measures. Choose the step for production sweeps.
+
+### Production baseline
+
+**O-3 ⛔ Production `SEED`.** `configs/production_labpc.args` sets 20250812,
+the one seed on which `cap` failed in D-A.1 (`pde_richards` L/L0 0.418 vs
+2.3e-05 and 7.9e-05; psi pinned at the cap). Seeds 7 and 1234 passed under
+cap. Blocks `run_production_baseline.bat train`.
+
+**O-6 ◐ Acceptance criterion for the production baseline.** D-5.6 requires a
+converged baseline but defines no criterion. `scripts/check_baseline.py` on
+baseline-v1: base drift 1.294 mm (u) and 1.399 mm (v) at t = 30 d (0.153 /
+0.086 mm at t = 0); least-converged term `bc_mech` L/L0 1.27e-02; others
+1.3e-04 to 6.8e-03. Decide what drift and ratios make "converged" before
+reading the v2 numbers, not after.
+
+### Figures and reporting
+
+**O-4 ⛔ Fig 9 SRF state: `failed` or `stable`.** Distinct from t = 30 d
+(D-5.8). Blocks `run_phase5.bat figs`.
+
+**O-5 ◐ Fig 10 layout.** The workbook defines Fig 10 as FOS bars (LEM /
+MC / GHB); D-5.1 makes the FOS-vs-`w_yield` plateau compulsory. Implemented
+both: `fig10` = bars with plateau range as error bars, `figS1` = plateau.
+Decide: plateau as a Fig 10 panel, supplementary, or renumber.
+
+**O-15 ◐ LEM comparison framing.** Ulusay's F = 0.94 uses residual bedding
+strength in limit equilibrium; the PINN uses rock-mass GHB (and rock-mass MC
+under D-5.2 a). The baseline-v1 probe declared no failure to SRF 2.0. Decide how
+Results and Discussion present a PINN FOS that may sit well above 0.94, before
+the number exists.
+
+**O-19 ◐ Fig 1 source.** Cannot be generated from the repo; redraw from
+Ulusay et al. (2014) with citation, or obtain permission to reproduce.
+
+### Physics and methods consistency
+
+**O-13 ◐ Yield on total or effective stress.** `loss.L_yield` checks total
+stress sigma_0 + D:eps with the Bishop increment; the
+`plasticity.yield_violation` docstring describes its inputs as effective
+principal stresses. Methodology must state one, and the code must match it.
+
+**O-14 ◐ Tension clip in `make_fig6` FS.** Clipping sigma_3 < 0 to zero
+credits tensile points with the rock-mass UCS; 147 Mk_d points within 3 m of
+the ground lie beyond the GHB tensile cutoff yet read FS >= 1 (Day 40). Keep
+and report, or change the FS definition.
+
+**O-11 ◐ GSI arm and sigma_0.** The GSI arm moves E; sigma_0 is not
+re-equilibrated (`sigma0_consistent: false`). Re-solve sigma_0 per arm
+(`17_sigma0_solve.py`) or state as a limitation.
+
+### Phase 6 scope
+
+**O-9 ⛔ `KS_STRATUM` and `GSI_STRATUM`.** Replace the plan's coal-seam K_s
+arm (no coal in Section 5). Blocks `run_phase6.bat arms`.
+
+**O-10 ◐ Rainfall arm.** 10/20/40 mm/hr give bit-identical boundary conditions
+under `INFILTRATION_MODE = "capacity_limited"` (test-pinned). Drop the arm, or
+change the infiltration mode (a model change).
+
+**O-12 ◐ Replicates.** `--sampling-seed` varies collocation draws only; true
+network-seed replicates need one production baseline per seed (~18 h each).
+
+### Housekeeping
+
+**O-16 ○ D-A.1 cross-reference.** D-A.1 still reads cap vs exp as open;
+D-5.7 decided `cap`. Add a pointer in D-A.1.
+
+**O-17 ○ Stale text.** `docs/day39_build_check.md` §3a (yield term
+"unwired"); `docs/STEP6_STATUS.md` (coal K_s arm, "~50 GPU-days" N_PDE
+estimate scaled from N = 500, "~21.5%"); the 60-day workflow's coal-seam K_s
+arm; `boundaries.flux_bc` docstring ("on Tm ~56% infiltrates": no rainfall
+segment touches Tm).
+
+**O-18 ○ Dead stub in `boundaries.py`.** `mechanical_bc` is defined twice
+(lines ~157 and ~198); the second, live definition silently replaces the
+first (`write_step22_mech.sh` appended instead of replacing). Harmless now;
+remove the stub.

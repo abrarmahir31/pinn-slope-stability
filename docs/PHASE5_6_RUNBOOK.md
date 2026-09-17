@@ -1,5 +1,8 @@
 # Phase 5–6 runbook (Day 40)
 
+> **Day 42:** the step-by-step command sequence to all 12 figures is now
+> `docs/RUN_ALL_STEPS.md`; open issues are in the DECISIONS.md register (O-1 to O-19).
+
 What exists after Day 40, what you must decide before GPU time, how to run it,
 and what must be reported next to every number. Nothing here is a result.
 Every FOS, figure and table comes from your runs.
@@ -127,9 +130,10 @@ thresholds from.** Source: DECISIONS.md D-5.5 discussion.
 | 1.10 | 0.929 | 0.671 | 0.914 |
 | 1.15 | 0.907 | 0.679 | 0.900 |
 
-- `ref` divides the yield term by its baseline value (0.026), so
-  `w_yield` = 1 under `ref` is ~38× stronger than under `raw`; the 0.3/1/3
-  plateau probes different penalty strengths under each.
+- ~~`ref` is ~38× stronger than `raw`~~ **Withdrawn (Day 42).** The 0.026
+  scale came from a 400-point CPU sample. On the GPU at N_PDE 10,000 the
+  baseline yield term is 0.450, so `ref` is ~2.2× stronger than `raw`, and
+  the `ref` scale depends on N_PDE. See DECISIONS.md O-1.
 - Rock-mass MC at σ₃max 179 kPa: Mk c 70.2 kPa φ 32.8°, Mk_d c 22.0 kPa
   φ 18.0°, Tm c 345.6 kPa φ 56.3°. It starts admissible and falls with SRF,
   so option (a) is workable, unlike the bedding pair.
