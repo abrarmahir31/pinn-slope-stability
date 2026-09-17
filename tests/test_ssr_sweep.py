@@ -252,3 +252,22 @@ def test_smoke_run_end_to_end(tmp_path, tiny, criterion):
     # Resume: a second invocation re-uses every point and adds none.
     S.run(S.parse(argv))
     assert len(open(out / "sweep.jsonl").readlines()) == 4
+
+
+def test_reachable_drop_exposes_an_area_threshold_that_cannot_fire():
+    # baseline-v1 shares and GHB admissibility (decision_evidence.py, D = 1)
+    adm = {"Mk": 0.999, "Mk_d": 0.389, "Tm": 1.0}
+    sh = {"Mk": 0.0302, "Mk_d": 0.0980, "Tm": 0.8719}
+    r = S.reachable_drop(adm, sh, "area")
+    assert r["dominant_tag"] == "Tm"
+    assert r["reachable_without_dominant"] == pytest.approx(
+        0.0302 * 0.999 + 0.0980 * 0.389, rel=1e-9)
+    assert r["reachable_without_dominant"] < 0.10
+
+
+def test_reachable_drop_for_a_single_marl_tag_is_its_full_value():
+    # Control: tag:Mk_d does not depend on Tm, so everything is reachable.
+    adm = {"Mk": 0.999, "Mk_d": 0.389, "Tm": 1.0}
+    sh = {"Mk": 0.0302, "Mk_d": 0.0980, "Tm": 0.8719}
+    assert S.reachable_drop(adm, sh, "tag:Mk_d")["reachable_without_dominant"] \
+        == pytest.approx(0.389)

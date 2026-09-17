@@ -75,9 +75,12 @@ zone you choose, and keep its JSON.
 
 Task 1: 55% of Mk_d (5.4% of the area) is outside GHB in the elastic
 baseline. The Day-39 absolute floor of 0.80 would read `tag:Mk_d` as failed at
-SRF = 1. With `area`, Mk_d is diluted by Tm's 87% share, so a band confined to
-Mk_d moves the area metric by at most ~0.1. Choose the metric and drop
-together.
+SRF = 1. With `area`, Tm holds 87.2% of the area at 100% admissible, so even
+complete yielding of Mk and Mk_d moves the metric by at most **0.068**
+(`area` 0.940 → 0.872). `--admissible-metric area --admissible-drop 0.10`
+therefore cannot fire unless Tm yields. `ssr_sweep.py` now warns about this at
+the reference state (`reachable_drop` in result.json). Choose the metric and
+drop together; see `docs/SUPERVISOR_BRIEF.md` D5.
 
 ### 2.5 Other items from Days 40–41
 

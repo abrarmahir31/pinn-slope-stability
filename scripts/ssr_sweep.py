@@ -211,6 +211,24 @@ def _diagnostics(net, coll, mats, yparams, criterion, spec, s=SCALES):
                                  if k.startswith("pde_yield_")}}
 
 
+def reachable_drop(adm: dict, shares: dict, spec: str) -> dict:
+    """Largest drop the metric can show if every stratum EXCEPT the one with
+    the largest area share yields completely.
+
+    Under `area`, Tm holds ~87% of Section 5, so a failure confined to the
+    marls moves the metric by at most the marls' admissible share (~0.07 on
+    baseline-v1). An --admissible-drop above that cannot fire unless the
+    dominant stratum yields -- a guard that cannot trip. Reported, and warned
+    about at the reference state; not an error, because a Tm-involving
+    mechanism is not ruled out a priori.
+    """
+    ref = _admissible_metric(adm, shares, spec)
+    dom = max(shares, key=shares.get)
+    kept = {t: (adm[t] if t == dom else 0.0) for t in adm}
+    return {"dominant_tag": dom, "metric_ref": ref,
+            "reachable_without_dominant": ref - _admissible_metric(kept, shares, spec)}
+
+
 def _has_failed(rec, ref, a) -> bool:
     """All three, deliberately. Each alone fires on optimiser trouble."""
     return bool(rec["total"] > a.plateau_factor * ref["total"]
@@ -388,6 +406,14 @@ def run(a):
         print(f"\n=== {a.criterion} SSR sweep, w_yield={a.w_yield} "
               f"({a.yield_norm}) ===")
         ref = evaluate(a.srf_start)
+        reach = reachable_drop(ref["admissible_by_tag"], ref["area_shares"],
+                               a.admissible_metric)
+        if a.admissible_drop >= reach["reachable_without_dominant"]:
+            print(f"WARNING: --admissible-drop {a.admissible_drop} needs "
+                  f"{reach['dominant_tag']} to yield: failure confined to the "
+                  f"other strata can move '{a.admissible_metric}' by at most "
+                  f"{reach['reachable_without_dominant']:.3f}. The "
+                  f"admissible condition may never fire.")
         stable, failed, srf = a.srf_start, None, a.srf_start
         n_max = 3 if a.smoke else int(round((a.srf_max - a.srf_start)
                                             / a.srf_step))
@@ -409,6 +435,7 @@ def run(a):
                   "admissible_drop": a.admissible_drop,
                   "admissible_ref": ref["admissible"],
                   "admissible_ref_by_tag": ref.get("admissible_by_tag"),
+                  "reachable_drop": reach,
                   "plateau_factor": a.plateau_factor,
                   "disp_factor": a.disp_factor, "cold_start": a.cold_start,
                   "epochs": epochs, "lr": a.lr, "sig3_range": _sig3_range(a),
