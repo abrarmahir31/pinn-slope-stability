@@ -31,12 +31,11 @@ from src import sensitivity as sens
 VALIDATION_ONLY_BASELINES = ("baseline-v1",)
 
 
-def validation_only_shas(root: str = "baselines") -> dict:
+def frozen_shas(root: str = "baselines") -> dict:
+    """checkpoint sha256 -> baseline tag, for every frozen baseline."""
     out = {}
-    for tag in VALIDATION_ONLY_BASELINES:
-        mp = os.path.join(root, tag, "MANIFEST.json")
-        if not os.path.exists(mp):
-            continue
+    for mp in sorted(glob.glob(os.path.join(root, "*", "MANIFEST.json"))):
+        tag = os.path.basename(os.path.dirname(mp))
         with open(mp) as f:
             files = json.load(f).get("files", {})
         for name, meta in files.items():
@@ -45,13 +44,26 @@ def validation_only_shas(root: str = "baselines") -> dict:
     return out
 
 
+# Back-compat name used by earlier tests.
+validation_only_shas = frozen_shas
+
+
 def headline_status(run: dict, shas: dict) -> str:
-    """'eligible', 'validation_only:<tag>', or 'unknown' (no sha recorded)."""
+    """'eligible' only for a FROZEN baseline that is not validation-only.
+
+    Day 42: `runs/ansatz/exp_seed7/ckpt_final.pt` was overwritten with a
+    different network (eps_uv 1e-3 -> 1e-2). Its hash matched no manifest, and
+    the old rule called that 'eligible'. An unfrozen checkpoint can be
+    replaced without trace, so it cannot back a headline number.
+    """
     sha = run.get("baseline_sha256")
     if not sha:
         return "unknown"
-    if sha in shas:
-        return f"validation_only:{shas[sha]}"
+    tag = shas.get(sha)
+    if tag is None:
+        return "unfrozen_baseline"
+    if tag in VALIDATION_ONLY_BASELINES:
+        return f"validation_only:{tag}"
     return "eligible"
 
 

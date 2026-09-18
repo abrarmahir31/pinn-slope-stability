@@ -110,19 +110,30 @@ def test_headline_status_marks_validation_baselines(tmp_path):
     _manifest(str(tmp_path / "b"), "baseline-v1", "abc")
     shas = C.validation_only_shas(str(tmp_path / "b"))
     assert C.headline_status({"baseline_sha256": "abc"}, shas) == "validation_only:baseline-v1"
-    assert C.headline_status({"baseline_sha256": "def"}, shas) == "eligible"
+    assert C.headline_status({"baseline_sha256": "def"}, shas) == "unfrozen_baseline"
     assert C.headline_status({}, shas) == "unknown"
 
 
 def test_load_runs_attaches_headline_status(tmp_path):
     _manifest(str(tmp_path / "b"), "baseline-v1", "abc")
     _run(tmp_path, "ssr_v1", baseline_sha256="abc")
+    _manifest(str(tmp_path / "b"), "baseline-v2", "fff")
     _run(tmp_path, "ssr_prod", baseline_sha256="fff")
+    _run(tmp_path, "ssr_edited", baseline_sha256="999")
     rows = {os.path.basename(r["dir"]): r["headline"]
             for r in C.load_runs(str(tmp_path / "ssr*"), str(tmp_path / "b"))}
-    assert rows == {"ssr_v1": "validation_only:baseline-v1", "ssr_prod": "eligible"}
+    assert rows == {"ssr_v1": "validation_only:baseline-v1",
+                    "ssr_prod": "eligible",
+                    "ssr_edited": "unfrozen_baseline"}
 
 
 def test_the_repo_manifest_identifies_baseline_v1():
     shas = C.validation_only_shas("baselines")
     assert "0a193d83f3d87da53ac606742a952b041bcf27a0d94408f2314326180e67a53f" in shas
+
+
+def test_an_overwritten_checkpoint_is_not_headline_eligible(tmp_path):
+    """Day 42 incident: a checkpoint edited in place matches no manifest."""
+    _manifest(str(tmp_path / "b"), "baseline-v1", "abc")
+    shas = C.frozen_shas(str(tmp_path / "b"))
+    assert C.headline_status({"baseline_sha256": "edited"}, shas) == "unfrozen_baseline"

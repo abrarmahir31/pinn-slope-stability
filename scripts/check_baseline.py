@@ -54,8 +54,9 @@ def base_drift(ckpt_path, t_days, n=200) -> dict:
     cfg = d["cfg"]
     pc = dataclasses.replace(tiny(), n_layers=cfg["layers"],
                              n_neurons=cfg["width"], device="cpu")
+    uv = {} if cfg.get("eps_uv") is None else {"eps_uv": float(cfg["eps_uv"])}
     net = NearPhysical(PINN(pc, BOUNDS), eps_psi=cfg["eps_psi"],
-                       mode=cfg["ansatz"], cap_k=cfg.get("cap_k", 100.0))
+                       mode=cfg["ansatz"], cap_k=cfg.get("cap_k", 100.0), **uv)
     net.load_state_dict(d["net"])
     net.eval()
     x_hi = float(g.x_f1(g.Z_BASE)) - 0.5
@@ -78,6 +79,7 @@ def report(run_dir, t_max):
     bd = base_drift(ck, (0.0, t_max))
     rec = last_record(lg) if os.path.exists(lg) else None
     return {"run": run_dir, "step": bd["step"], "drift": bd["drift"],
+            "loss_raw": dict(rec["L"]) if rec else None,
             "ansatz": bd["cfg"].get("ansatz"), "seed": bd["cfg"].get("seed"),
             "epochs": bd["cfg"].get("epochs"),
             "lbfgs_epochs": bd["cfg"].get("lbfgs_epochs"),
@@ -126,6 +128,10 @@ def main(argv=None):
     line("sec/epoch", lambda r: "-" if r["sec_per_epoch"] is None else f"{r['sec_per_epoch']:.3f}")
     for k in (rows[0]["loss_ratios"] or {}):
         line(f"L/L0 {k}", lambda r, k=k: "-" if not r["loss_ratios"] else f"{r['loss_ratios'].get(k, float('nan')):.2e}")
+    print("  (L/L0 is normalised by EACH run's own first-step loss; the "
+          "ratios are not comparable between runs. Absolute values are:)")
+    for k in (rows[0]["loss_raw"] or {}):
+        line(f"L {k}", lambda r, k=k: "-" if not r["loss_raw"] else f"{r['loss_raw'].get(k, float('nan')):.2e}")
     bad = facts(rows[0])
     print("\nFACTS: " + ("none failing" if not bad else "; ".join(bad)))
     print("Judgement calls (drift small enough? psi healthy?) are open issues; "

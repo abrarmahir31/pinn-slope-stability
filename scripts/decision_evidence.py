@@ -80,8 +80,9 @@ def baseline_stress(ckpt, n, seed):
     cfg = d["cfg"]
     pc = dataclasses.replace(tiny(), n_layers=cfg["layers"],
                              n_neurons=cfg["width"], device="cpu")
+    uv = {} if cfg.get("eps_uv") is None else {"eps_uv": float(cfg["eps_uv"])}
     net = NearPhysical(PINN(pc, BOUNDS), eps_psi=cfg["eps_psi"],
-                       mode=cfg["ansatz"], cap_k=cfg.get("cap_k", 100.0))
+                       mode=cfg["ansatz"], cap_k=cfg.get("cap_k", 100.0), **uv)
     net.load_state_dict(d["net"])
     net.eval()
     coll = attach_sigma0(sample_interior(n, seed))

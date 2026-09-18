@@ -58,6 +58,9 @@ def net_from_ckpt(d, cfg, BOUNDS, mode=None, eps_psi=None):
     eps = eps_psi if eps_psi is not None else saved.get("eps_psi")
     md = mode if mode is not None else saved.get("ansatz")
     ck = saved.get("cap_k")
+    uv = saved.get("eps_uv")          # Day 42: a checkpoint trained at a
+    if uv is not None:                # non-default eps_uv must be rebuilt
+        kw["eps_uv"] = float(uv)      # with it (O-20), not the module default
     if eps is not None:
         kw["eps_psi"] = float(eps)
     if md is not None:

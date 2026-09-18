@@ -54,6 +54,9 @@ def net_from_ckpt(d, cfg, BOUNDS, mode=None, eps_psi=None):
         kw["mode"] = md
     if ck is not None:
         kw["cap_k"] = float(ck)
+    uv = saved.get("eps_uv")   # Day 42: rebuild at the
+    if uv is not None:         # checkpoint's eps_uv, not the default
+        kw["eps_uv"] = float(uv)
     if md is None:
         print("WARNING: checkpoint carries no 'ansatz' key; using the default. "
               "If this was a cap/exp run the field below is WRONG.")

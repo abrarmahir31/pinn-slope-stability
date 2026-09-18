@@ -89,3 +89,45 @@ def test_progress_reads_records_in_srf_order(tmp_path):
     s = P.summarise(str(d))
     assert [r["srf"] for r in s["records"]] == [1.0, 1.5]
     assert P.main([str(d)]) == 0
+
+
+# --- eps_uv must travel with the checkpoint (O-20) --------------------------
+
+def test_every_rebuild_path_uses_the_checkpoint_eps_uv():
+    """A checkpoint trained at eps_uv = 1e-2 must not be rebuilt at the
+    module default 1e-3: displacements would be 10x wrong and silently so."""
+    from scripts import make_fig9 as F9
+    from scripts import ssr_sweep as S
+    from types import SimpleNamespace
+    cfg = {"layers": 2, "width": 16, "ansatz": "exp", "eps_psi": 0.3,
+           "eps_uv": 1e-2, "cap_k": 100.0, "n_pde": 100, "n_bc": 100,
+           "n_iface": 20, "seed": 3, "t_max": 30.0}
+    assert F9.build_net(cfg).eps_uv == 1e-2
+    a = SimpleNamespace(n_pde=None, n_bc=None, n_iface=None,
+                        sampling_seed=None, device="cpu")
+    assert S._train_args(cfg, a).eps_uv == 1e-2
+    assert CB.base_drift.__module__                      # import guard
+    net = F9.build_net({**cfg, "eps_uv": None})
+    assert net.eps_uv == 1e-3                            # default when unset
+
+
+def test_train_exposes_eps_uv_and_re_derives_the_formula_seed():
+    from src.weighting import pi_seed
+    a = train.parse(["--layers", "8", "--eps-uv", "1e-2"])
+    assert a.eps_uv == 1e-2
+    base = pi_seed()["pde_richards"]
+    assert pi_seed(eps_uv=1e-2)["pde_richards"] == pytest.approx(100 * base)
+
+
+def test_every_checkpoint_rebuild_site_handles_eps_uv():
+    """Day 42: make_fig5 was missed when eps_uv was threaded through the
+    rebuild paths, so it drew a 1e-2 checkpoint at the 1e-3 default. Any
+    script that reads `cfg["ansatz"]` from a checkpoint must also read
+    `eps_uv`."""
+    import pathlib
+    missed = []
+    for p in sorted(pathlib.Path("scripts").glob("*.py")):
+        src = p.read_text()
+        if 'saved.get("ansatz")' in src and 'saved.get("eps_uv")' not in src:
+            missed.append(p.name)
+    assert missed == [], f"rebuild sites ignoring eps_uv: {missed}"

@@ -73,8 +73,8 @@ from src.nondim import SCALES                                    # noqa: E402
 from src.weighting import TERMS                                  # noqa: E402
 
 MC_DESIGN = st.MCParams(c=4400.0, phi=math.radians(15.4))
-_CFG_KEYS = ("layers", "width", "seed", "eps_psi", "ansatz", "cap_k",
-             "n_pde", "n_bc", "n_iface", "t_max")
+_CFG_KEYS = ("layers", "width", "seed", "eps_psi", "eps_uv", "ansatz",
+             "cap_k", "n_pde", "n_bc", "n_iface", "t_max")
 
 
 # ---------------------------------------------------------------------------
@@ -350,6 +350,32 @@ def _sha256(path, chunk=1 << 20):
     return h.hexdigest()
 
 
+_FINGERPRINT = ("criterion", "w_yield", "yield_norm", "cold_start",
+                "admissible_metric", "admissible_secondary", "admissible_drop",
+                "plateau_factor", "disp_factor", "epochs", "lr", "srf_start",
+                "srf_step", "mc_strength", "mc_sig3max", "sig3_lo", "sig3_hi",
+                "n_pde", "n_bc", "sampling_seed", "smoke")
+
+
+def fingerprint(a, baseline_sha, kc, overrides) -> dict:
+    """Everything that must not change between the records in one run
+    directory. Resuming with any of it different would mix incomparable SRF
+    points into one sweep (Day 42: a --cold-start command silently resumed a
+    warm run computed on a different checkpoint and rewrote result.json)."""
+    out = {k: getattr(a, k, None) for k in _FINGERPRINT}
+    out["baseline_sha256"] = baseline_sha
+    out["kc"] = kc
+    out["overrides"] = overrides
+    return out
+
+
+def check_resume(fp: dict, path: str) -> dict:
+    """Compare `fp` with the stored fingerprint; return the differences."""
+    with open(path) as f:
+        old = json.load(f)
+    return {k: (old.get(k), fp[k]) for k in fp if old.get(k) != fp[k]}
+
+
 def _git_commit():
     try:
         return subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
@@ -398,6 +424,22 @@ def run(a):
             y_scale = 1.0
         print(f"L_yield(baseline, SRF {a.srf_start}) = {y0:.4e}   "
               f"yield scale = {y_scale:.4e}")
+
+        fp = fingerprint(a, _sha256(a.baseline), kc_name, overrides)
+        fp_path = os.path.join(a.out, "run_fingerprint.json")
+        if os.path.exists(fp_path):
+            diff = check_resume(fp, fp_path)
+            if diff:
+                raise RuntimeError(
+                    "refusing to resume: this run directory was written with "
+                    "different settings, and mixing them would put "
+                    "incomparable SRF points in one sweep.\n  "
+                    + "\n  ".join(f"{k}: on disk {o!r}, now {n!r}"
+                                   for k, (o, n) in sorted(diff.items()))
+                    + f"\nUse a new --out, or delete {a.out} to start over.")
+        else:
+            with open(fp_path, "w") as f:
+                json.dump(fp, f, indent=1)
 
         done, last_key = {}, None
         if os.path.exists(logp):
@@ -514,7 +556,8 @@ def run(a):
                   "arm": (arms.load_arm_file(a.overrides) if a.overrides else None),
                   "sigma0_consistent": arms.sigma0_consistent(overrides),
                   "baseline": a.baseline,
-                  "baseline_sha256": _sha256(a.baseline),
+                  "baseline_sha256": fp["baseline_sha256"],
+                  "fingerprint": fp,
                   "baseline_step": ckpt.get("step"),
                   "baseline_epochs": cfg.get("epochs"),
                   "n_pde": targs.n_pde,

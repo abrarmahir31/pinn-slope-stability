@@ -349,3 +349,44 @@ def test_diagnostics_record_the_secondary_without_changing_the_primary(tiny):
 def test_has_failed_ignores_the_secondary_metric():
     rec = {**FAIL, "admissible": REF["admissible"], "admissible_secondary": 0.0}
     assert S._has_failed(rec, {**REF, "admissible_secondary": 1.0}, _args()) is False
+
+
+# --- resume must not mix incomparable settings (Day 42) ---------------------
+
+def test_fingerprint_covers_the_settings_that_must_not_change():
+    a = _args(criterion="GHB", w_yield=1.0, yield_norm="raw", cold_start=False,
+              admissible_secondary="tag:Mk_d", epochs=1500, lr=3e-4,
+              srf_start=1.0, srf_step=0.25, n_pde=10000, n_bc=3000,
+              sampling_seed=7, smoke=False)
+    fp = S.fingerprint(a, "abc", "default", {})
+    for k in ("baseline_sha256", "cold_start", "w_yield", "yield_norm",
+              "criterion", "sig3_hi", "kc"):
+        assert k in fp
+
+
+def test_check_resume_reports_every_difference(tmp_path):
+    a = _args(criterion="GHB", w_yield=1.0, yield_norm="raw", cold_start=False,
+              admissible_secondary="tag:Mk_d", epochs=1500, lr=3e-4,
+              srf_start=1.0, srf_step=0.25, n_pde=10000, n_bc=3000,
+              sampling_seed=7, smoke=False)
+    p = tmp_path / "fp.json"
+    json.dump(S.fingerprint(a, "abc", "default", {}), open(p, "w"))
+    assert S.check_resume(S.fingerprint(a, "abc", "default", {}), str(p)) == {}
+    a.cold_start = True
+    diff = S.check_resume(S.fingerprint(a, "def", "default", {}), str(p))
+    assert diff["cold_start"] == (False, True)
+    assert diff["baseline_sha256"] == ("abc", "def")
+
+
+def test_run_refuses_to_resume_with_a_different_setting(tmp_path, tiny):
+    t, net, _, _ = tiny
+    ck = tmp_path / "ckpt.pt"
+    torch.save({"net": net.state_dict(), "bal": {"w": {k: 1.0 for k in TERMS}},
+                "cfg": {**vars(t), "no_feedback": False}, "step": 0}, ck)
+    out = tmp_path / "ssr"
+    argv = ["--criterion", "GHB", "--baseline", str(ck), "--out", str(out),
+            "--device", "cpu", "--smoke", *REQ, "--sig3-lo", "0",
+            "--sig3-hi", "8.5e5"]
+    S.run(S.parse(argv))
+    with pytest.raises(RuntimeError, match="refusing to resume"):
+        S.run(S.parse(argv + ["--cold-start"]))

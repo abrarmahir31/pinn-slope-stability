@@ -45,8 +45,9 @@ def build_net(cfg: dict):
     pc = dataclasses.replace(tiny(), n_layers=cfg["layers"],
                              n_neurons=cfg["width"], seed=cfg.get("seed", 0),
                              device="cpu")
+    uv = {} if cfg.get("eps_uv") is None else {"eps_uv": float(cfg["eps_uv"])}
     return NearPhysical(PINN(pc, BOUNDS), eps_psi=cfg["eps_psi"],
-                        mode=cfg["ansatz"], cap_k=cfg.get("cap_k", 100.0))
+                        mode=cfg["ansatz"], cap_k=cfg.get("cap_k", 100.0), **uv)
 
 
 def state_path(run_dir: str, state: str) -> tuple[str, float]:

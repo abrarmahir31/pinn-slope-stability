@@ -90,6 +90,7 @@ from src.nondim import SCALES
 from src.sigma0 import attach_sigma0
 from src.weighting import (PI_SEED_8X64, PI_SEED_8X64_T0,
                            BalancerConfig, LossBalancer, TERMS)
+from src.weighting import pi_seed
 def _atomic_save(payload, path):
     tmp = f"{path}.tmp"
     torch.save(payload, tmp)
@@ -106,8 +107,9 @@ def setup(a):
     """
     cfg = dataclasses.replace(tiny(), n_layers=a.layers, n_neurons=a.width,
                               seed=a.seed, device=a.device)
+    uv = {} if getattr(a, "eps_uv", None) is None else {"eps_uv": a.eps_uv}
     net = NearPhysical(PINN(cfg, BOUNDS), eps_psi=a.eps_psi,
-                       mode=a.ansatz, cap_k=a.cap_k)
+                       mode=a.ansatz, cap_k=a.cap_k, **uv)
     dev = net.device
 
     coll = sample_interior(a.n_pde, a.seed)
@@ -207,6 +209,14 @@ def parse(argv=None):
                         "IC distortion but less of the spread fixed. k=20 "
                         "distorts psi_0 = -3 m by 145%% and is unusable; "
                         "k=1000 leaves the spread at 100x.")
+    g.add_argument("--eps-uv", type=float, default=None,
+                   help="ansatz displacement scale u*, v* = eps_uv * net. "
+                        "Default None = the shipped 1e-3. THE FORMULA SEED "
+                        "DEPENDS ON IT: w0[pde_richards] = "
+                        "((Pi_M*eps_uv)/(Pi_R*eps_psi))^2, so this flag also "
+                        "re-derives the seed. Use the flag; do not edit "
+                        "weighting._EPS_UV, which changes the seed for every "
+                        "run and every test at once (O-20).")
     g.add_argument("--seed-source", choices=("formula", "t0", "geomean"),
                    default="formula",
                    help="which D-W.7 seed to start the balancer from, at "
@@ -246,6 +256,12 @@ def main(argv=None) -> int:
                   "formula": None}[a.seed_source]
     else:
         seed_w = None
+    if a.seed_source == "formula" and getattr(a, "eps_uv", None) is not None:
+        # The balancer would otherwise fall back to the module PI_SEED, which
+        # is computed at the default eps_uv: a 10x eps_uv is a 100x seed.
+        seed_w = pi_seed(eps_psi=a.eps_psi, eps_uv=a.eps_uv)
+        print(f"formula seed re-derived at eps_uv={a.eps_uv:g}: "
+              f"w0[pde_richards]={seed_w['pde_richards']:.4g}")
     print(f"seed source: {a.seed_source}"
           + ("" if seed_w is None else
              "  " + "  ".join(f"{k}={v:.3g}" for k, v in sorted(seed_w.items()))))
