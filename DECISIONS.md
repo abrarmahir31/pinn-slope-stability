@@ -488,6 +488,10 @@ are one.
 
 ### D-A.1 — `unbounded` is rejected on the 3×3; cap vs exp is left open
 
+> **Closed by D-5.7 (Day 41):** `cap` was chosen for the production baseline.
+> Note the seed conflict recorded there: in the ablation below, `cap` failed
+> on seed 20250812, which is the seed in `configs/production_labpc.args`.
+
 `NearPhysical` gains `mode` ∈ {`unbounded`, `cap`, `exp`} and `cap_k`. **The
 default is unchanged (`unbounded`)**, so every prior checkpoint, `PI_SEED_8X64`
 and Step 3.4 weight stays valid; the arms are selected explicitly by
@@ -897,18 +901,76 @@ change the infiltration mode (a model change).
 **O-12 ◐ Replicates.** `--sampling-seed` varies collocation draws only; true
 network-seed replicates need one production baseline per seed (~18 h each).
 
+**O-20 ⛔ The baseline checkpoint was overwritten in place (Day 42).**
+`runs/ansatz/exp_seed7/ckpt_final.pt` now holds a different network:
+`eps_uv` 1e-3 -> 1e-2, L_yield(baseline, SRF 1) 0.450 -> 22.636, |u| at
+SRF 1 1.06e-3 -> 6.88e-3. Consequences: (i) every earlier run on that path
+(the smoke runs, both probes, the Day-40/41 evidence) is not comparable with
+anything run after it; (ii) `probe_ghb_raw/result.json` was rewritten by a
+`--cold-start` command that silently resumed the nine warm records computed on
+the OLD checkpoint, so that file's provenance is wrong; (iii) an unfrozen
+checkpoint can be replaced without trace. Code changes made in response, not
+decisions: `ssr_sweep.py` writes `run_fingerprint.json` and refuses to resume
+when the baseline hash, cold-start flag or any sweep setting differs;
+`collect_results.py` marks any baseline not in a `baselines/*/MANIFEST.json`
+as `unfrozen_baseline`, never `eligible`.
+**Open:** whether `eps_uv` = 1e-2 is adopted (a model change: it scales the
+network's displacement contribution, and the Step 3.4 balancer weights were
+tuned for 1e-3), which checkpoint each future run uses, and whether the
+affected probe directories are discarded or kept as pre-change evidence.
+
+**O-21 ◐ The hydraulic problem as posed is essentially static, and the
+domain is unsaturated throughout.** Measured on the 100k run
+`runs/ansatz_epsuv1e-2` (200x200 grid, 34,185 interior points):
+
+| t (d) | psi median | psi min | psi max | psi >= 0 fraction |
+|---|---|---|---|---|
+| 0 | -64.37 | -135.72 | -3.13 | 0.0000 |
+| 30 | -64.38 | -135.74 | -3.23 | 0.0000 |
+
+largest |psi - psi_0| at t = 30 d: **0.248 m**. The cause is structural, not a
+solver failure: `boundaries.Z_WT` = 197.0 m a.s.l. is **3 m below the domain
+floor** (`geometry.Z_BASE` = 200 m; `12_bc_plot.py` already labels it "below
+domain"), so the initial condition is hydrostatic suction psi = Z_WT - z and
+the solution stays there. psi_max = -3.23 m against Z_WT - Z_BASE = -3.0 m;
+psi_min = -135.74 m against 197 - 332.7 = -135.7 m at the bench.
+
+Consequences to state in Results and Limitations, not to fix silently:
+1. **No saturated zone exists anywhere**, at any time, so Tm is unsaturated
+   throughout despite being described as the aquifer.
+2. The `interface` term is FROZEN at L = 7.7e-28 with ||grad L|| = 8.4e-31
+   because a hydrostatic field satisfies flux continuity across every contact
+   identically. Not a dead gradient; a degenerate solution.
+3. `pde_richards` at 8.7e-11 is not evidence of a well-resolved transient:
+   static hydrostatic suction satisfies Richards trivially.
+4. The workbook's Fig 5 caption ("wetting front + drawdown cone") cannot be
+   produced by this section: the drawdown cone belongs to Section 7, and the
+   rain BC is capacity-limited (D-A.4, O-10).
+5. **The HM coupling has little to couple.** Effective stress moves only with
+   a 0.248 m suction change over 30 days, so the Fig 11 one-way vs two-way
+   difference is likely to be near zero. That is a legitimate result, but it
+   is central to the thesis's framing and must be decided deliberately.
+
+Options: accept and report it as the physics of Section 5 under these
+boundary conditions; or revisit the water-table datum, which
+`docs/open_items.md` still carries as an open Step 2.3 item (the workbook says
+"water-table elevation still to be set from the head data", and Z_WT = 197 is
+described as the top of the karstic head range). Changing it invalidates
+sigma_0, the IC cache and every trained baseline.
+
 ### Housekeeping
 
-**O-16 ○ D-A.1 cross-reference.** D-A.1 still reads cap vs exp as open;
-D-5.7 decided `cap`. Add a pointer in D-A.1.
+**O-16 ✅ CLOSED (Day 42).** D-A.1 now carries a pointer to D-5.7 and to the
+seed conflict.
 
-**O-17 ○ Stale text.** `docs/day39_build_check.md` §3a (yield term
-"unwired"); `docs/STEP6_STATUS.md` (coal K_s arm, "~50 GPU-days" N_PDE
-estimate scaled from N = 500, "~21.5%"); the 60-day workflow's coal-seam K_s
-arm; `boundaries.flux_bc` docstring ("on Tm ~56% infiltrates": no rainfall
-segment touches Tm).
+**O-17 ◐ Stale text — repo files corrected (Day 42), external documents
+still open.** Corrected in place, as dated notes rather than rewrites:
+`docs/day39_build_check.md` §3a, `docs/STEP6_STATUS.md` (N_PDE cost and the
+coal K_s arm), `boundaries.flux_bc` docstring. **Still to fix outside the
+repo:** the 60-day workflow document still lists a coal-seam K_s arm and the
+"~21.5%" coupling figure; correct them before they reach the thesis.
 
-**O-18 ○ Dead stub in `boundaries.py`.** `mechanical_bc` is defined twice
-(lines ~157 and ~198); the second, live definition silently replaces the
-first (`write_step22_mech.sh` appended instead of replacing). Harmless now;
-remove the stub.
+**O-18 ✅ CLOSED (Day 42).** The shadowed stub was removed; the live
+definition is unchanged, and
+`test_loss_bc_mech.py::test_mechanical_bc_is_defined_exactly_once` asserts on
+the source so a second definition cannot reappear unnoticed.

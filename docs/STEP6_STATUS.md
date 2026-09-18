@@ -33,6 +33,18 @@ Four calendar days are allocated. That's before any re-bracketing, and before
 the `--w-yield` 0.3/1/3 plateau runs that Step 5 needs to make any single FOS
 reportable.
 
+> **CORRECTED (Day 42), two items in this document.**
+> 1. *N_PDE cost.* The estimate below scales from `train.py`'s default of 500.
+>    Production is **10,000** (`configs/production_labpc.args`, baseline-v1
+>    manifest), so 5k is ~0.5x a production sweep, 20k ~2x and 50k ~5x -- a
+>    few GPU-days for the ladder, not ~50. Measured Day 42: ~0.64 s/epoch in a
+>    sweep at N_PDE 10,000, so ~16 min per SRF at 1,500 epochs.
+> 2. *Coal-seam K_s arm.* Section 5 has no coal seam (Day 1 stratigraphic
+>    correction). `src/arms.py::section5_oat_arms` requires an explicit
+>    `ks_stratum` instead; the rainfall arm is also provably inert (all
+>    rainfall segments are Mk_d at K_s = 1e-9 m/s, capped). See DECISIONS.md
+>    O-10 and the Day 40 tests.
+
 **The N_PDE arm is the real problem.** `train.py` defaults to `--n-pde 500`. The
 plan proposes 5k–50k, so per-epoch cost rises roughly linearly:
 

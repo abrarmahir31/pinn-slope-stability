@@ -122,9 +122,15 @@ def flux_bc(segment, pts, tag=None):
     This is NOT a numerical convenience. At 20 mm/hr against marl at
     0.004 mm/hr, 99.98 per cent of the rain runs off; the uncapped condition
     asks the marl surface to conduct 5560x its saturated conductivity. On Tm
-    the ratio is 1.8x, so roughly 56 per cent infiltrates. Capping changes
-    which stratum drives the infiltration response, and that belongs in the
-    methods section, not in a comment.
+    the ratio is 1.8x, so roughly 56 per cent would infiltrate -- but (Day 42)
+    NO rainfall segment touches Tm: `natural_ground` and `bench` are entirely
+    Mk_d, and the cut face is no-flow, so the cap binds at every rainfall
+    point and the Tm figure is hypothetical. One consequence is that rainfall
+    intensity cannot change this boundary condition at all: 10, 20 and
+    40 mm/hr give bit-identical fluxes
+    (tests/test_arms.py::test_rainfall_arms_are_currently_identical_boundary_conditions).
+    Capping changes which stratum drives the infiltration response, and that
+    belongs in the methods section, not in a comment.
 
     Set INFILTRATION_MODE = "raw" to recover the old behaviour for comparison.
     """
@@ -154,13 +160,10 @@ def fischer_burmeister(psi, qn, eps=1e-6):
     return a + b - np.sqrt(a * a + b * b + eps)
 
 
-def mechanical_bc(segment):
-    """Displacement constraints per segment. None = traction-free."""
-    return {"base":         ("fixed",  dict(u=0.0, v=0.0)),
-            "far_field_f1": ("roller", dict(u=0.0)),
-            "pit_floor":    ("roller", dict(u=0.0))}.get(segment)
-
-
+# (Day 42) A stub `mechanical_bc` stood here, shadowed by the full definition
+# below: `write_step22_mech.sh` appended its block instead of replacing the
+# stub, so Python silently kept the second one. Removed; the live definition
+# is unchanged. test_loss_bc_mech pins that only one definition exists.
 
 # ============================ MECHANICAL BOUNDARY DATA =======================
 # Elastic constants, Hoek-Diederichs (2006):

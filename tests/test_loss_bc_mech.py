@@ -201,3 +201,15 @@ def test_parts_are_per_segment_means(bcs):
     seg_parts = [v.item() for k, v in parts.items() if k.startswith("bcmech_")]
     assert len(seg_parts) == 6
     assert abs(sum(seg_parts) - total.item()) > 1e-12
+
+def test_mechanical_bc_is_defined_exactly_once():
+    """O-18: a stub definition was shadowed by the live one for weeks. A second
+    `def mechanical_bc` would be silently ignored by Python, so assert on the
+    source rather than on behaviour."""
+    import inspect
+
+    from src.step21_geometry import boundaries as b
+    src = inspect.getsource(b)
+    assert src.count("\ndef mechanical_bc(") == 1
+    assert b.mechanical_bc("base")[0] == "fixed"
+    assert b.mechanical_bc("cut_face") is None

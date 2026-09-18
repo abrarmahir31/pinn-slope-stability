@@ -113,6 +113,12 @@ Two independent blockers.
 
 ### 3a. The yield term is still unwired -- this is the real one
 
+> **CORRECTED (Day 42).** Superseded later the same day: `92a8683`
+> "feat(loss): wire pde_yield into total_loss (soft constraint, Step 5.1)".
+> `total_loss` now takes `yield_params`, `w_yield` and `yield_criterion` and
+> reports `pde_yield` plus per-tag `admissible_*`. The finding below was true
+> when written; it is kept as the record of why the term was wired.
+
 `src/loss.py` `total_loss` has **no** `yield_params` argument and **no**
 `pde_yield` entry in its parts dict. Confirmed by grep; unchanged since
 `STEP5_STATUS.md` was written.
