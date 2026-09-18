@@ -30,3 +30,5 @@ scratch_*.py
 runs/
 *.patch
 *.log
+baselines/*/run/ckpt_0*.pt
+baselines/*/run/ckpt_adam_final.pt

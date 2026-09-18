@@ -1,0 +1,1105 @@
+{
+ "tag": "baseline-v2",
+ "frozen_utc": "2026-09-18T17:38:41",
+ "run_dir": "runs/ansatz_epsuv1e-2",
+ "checkpoint": "ckpt_final.pt",
+ "step": 100000,
+ "train_cfg": {
+  "layers": 8,
+  "width": 64,
+  "seed": 7,
+  "device": "cuda",
+  "n_pde": 10000,
+  "n_bc": 3000,
+  "n_iface": 500,
+  "t_max": 30.0,
+  "epochs": 100000,
+  "lr": 0.001,
+  "lr_schedule": "cosine",
+  "every": 25,
+  "lam": 0.3,
+  "warmup": 0,
+  "no_balance": false,
+  "log_every": 100,
+  "ckpt_every": 500,
+  "out": "runs\\ansatz_epsuv1e-2",
+  "resume": null,
+  "no_feedback": false,
+  "lbfgs_epochs": 0,
+  "lbfgs_lr": 1.0,
+  "lbfgs_history": 50,
+  "lbfgs_max_eval": 25,
+  "eps_psi": 0.3,
+  "ansatz": "cap",
+  "cap_k": 100.0,
+  "eps_uv": 0.01,
+  "seed_source": "formula"
+ },
+ "git": {
+  "commit": "567fbf1a68314f7c401228043641a9be260d8e06",
+  "branch": "step-5-strength",
+  "dirty": false
+ },
+ "torch": "2.13.0+cu130",
+ "python": "3.10.21",
+ "overrides": [
+  "elastic check accepted under D-5.4: 15.75% of points below FS=1 (unweighted); gate not applied"
+ ],
+ "files": {
+  "run/ckpt_000500.pt": {
+   "sha256": "e047cd71f35b0df4ec9ec9671ce9370c07e4836a776e4313bde8b86870a129ba",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_000500.pt"
+  },
+  "run/ckpt_001000.pt": {
+   "sha256": "922af41eeb16e6a0e46b6b1563987da3eb30c720d55516d0d9489b127fc935d7",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_001000.pt"
+  },
+  "run/ckpt_001500.pt": {
+   "sha256": "78beaf7c92b60fd8ec5d33ab484e1259119201048aadde0d4c6cae96487afbfa",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_001500.pt"
+  },
+  "run/ckpt_002000.pt": {
+   "sha256": "d17c53344d33d88c388719a70c51e8b9419534d0f8e1ee1252b00fec4064b69d",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_002000.pt"
+  },
+  "run/ckpt_002500.pt": {
+   "sha256": "7a1706bf2130dc86a21f6fab2d60f3248e59272f301a79214d9521f78e3eed86",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_002500.pt"
+  },
+  "run/ckpt_003000.pt": {
+   "sha256": "17d77b19750656a5134a96200759e2538247191ea9f63ca3490649227a94506d",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_003000.pt"
+  },
+  "run/ckpt_003500.pt": {
+   "sha256": "b76f8a57ea04638cfe3826393b04e4921ac2338553ef663b421bc02e7314b148",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_003500.pt"
+  },
+  "run/ckpt_004000.pt": {
+   "sha256": "67e9279b53c1a1fea6968772bfc00d3085b353d2cd9fdfb380b306b5fc74c4d9",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_004000.pt"
+  },
+  "run/ckpt_004500.pt": {
+   "sha256": "5fddc9134b4afbc650443a38f84e46dbc3878d27126f829ad67e98337e24d0c7",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_004500.pt"
+  },
+  "run/ckpt_005000.pt": {
+   "sha256": "100930734130c1df57d0edaa7dd97371497bafce35030d93928117c43748cf10",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_005000.pt"
+  },
+  "run/ckpt_005500.pt": {
+   "sha256": "8a1b9cc3fd80597bd1377b2d394ced62d93e51f73116e25738f492d74a71f95a",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_005500.pt"
+  },
+  "run/ckpt_006000.pt": {
+   "sha256": "4ff92dd88f46af1de5f7af12aaf332d0ee2faeccc2ce2d637cbf04c267536185",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_006000.pt"
+  },
+  "run/ckpt_006500.pt": {
+   "sha256": "ba3e77aa8590c645603731a0214ba391cf4158c09e5bada1cdc9cfc52a5ddacf",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_006500.pt"
+  },
+  "run/ckpt_007000.pt": {
+   "sha256": "80e46d050fc1b0403f6ad64dce6ae9f3fbebc1a5a1a11f05e5517b2db5429fd4",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_007000.pt"
+  },
+  "run/ckpt_007500.pt": {
+   "sha256": "fc5aa10db60437ad645e4834f73f883e1453a9f39059d2a7e5cc15fd4f5c9f57",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_007500.pt"
+  },
+  "run/ckpt_008000.pt": {
+   "sha256": "ac877037018e76ca449a89e118c03e0bfebf6be82d0228feabdf29f5f6b9d637",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_008000.pt"
+  },
+  "run/ckpt_008500.pt": {
+   "sha256": "9f61faa9c3931fe2980288f7533642c04df203c85a7e6225460be443c23a02a3",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_008500.pt"
+  },
+  "run/ckpt_009000.pt": {
+   "sha256": "343e5887c6c4a610abb8530b62b85d74d72c5ca299b8046a8d8a8f085d02c7af",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_009000.pt"
+  },
+  "run/ckpt_009500.pt": {
+   "sha256": "96e3d6b11e2125f2a0463a9faeb7e40572423a39108b4ac4acf13631a8438427",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_009500.pt"
+  },
+  "run/ckpt_010000.pt": {
+   "sha256": "12f722e05cdc268f2088f3576bae2510a10203d83846c60c2ced191b5c29357a",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_010000.pt"
+  },
+  "run/ckpt_010500.pt": {
+   "sha256": "7cbc1c6218dc0ce919687c8b6da00887a2d2c22a5905947b04c442c066f0d318",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_010500.pt"
+  },
+  "run/ckpt_011000.pt": {
+   "sha256": "8f680f8782ef3b9ce705ca8cd16fa897fd702fd124f6a6943fe5fa43642146e9",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_011000.pt"
+  },
+  "run/ckpt_011500.pt": {
+   "sha256": "fd34a411c7d4bda1fe174ba47a5061a08542b5dde58274cea18d488d88400655",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_011500.pt"
+  },
+  "run/ckpt_012000.pt": {
+   "sha256": "db57ff7be2f2190ab1bce92805068469766075313b63f13df0f910ea8aa65a35",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_012000.pt"
+  },
+  "run/ckpt_012500.pt": {
+   "sha256": "83717daf83da3531569b5d562f63c55328d6826d38067f82998054f1517dbb04",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_012500.pt"
+  },
+  "run/ckpt_013000.pt": {
+   "sha256": "7fb5921caaeb500d0d105317332d41f28b5c256d27ef21e7c98797b5d0209952",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_013000.pt"
+  },
+  "run/ckpt_013500.pt": {
+   "sha256": "bec9b05da22bbea5987b946343dc810914881e2b39a7b931633fdfc292618625",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_013500.pt"
+  },
+  "run/ckpt_014000.pt": {
+   "sha256": "034ae0a9d5a0760568648af485c366959483b38dd1031636af40a1059c0f4809",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_014000.pt"
+  },
+  "run/ckpt_014500.pt": {
+   "sha256": "84bc52fc02f5c333652390d6727446d2548fa11ab42c82e1555481320e3986be",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_014500.pt"
+  },
+  "run/ckpt_015000.pt": {
+   "sha256": "6880e7398f254c4685f22b13c1b3b0da1d5dc86f14e0388e838e55d84abcf292",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_015000.pt"
+  },
+  "run/ckpt_015500.pt": {
+   "sha256": "7d01a2f1818497930c162f1620b749e0aeb0b34b311a59e09a0fcf6c20434525",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_015500.pt"
+  },
+  "run/ckpt_016000.pt": {
+   "sha256": "e295029e83278e2571814986e1e797b2324edb99b4e5ed70144edcbe449b861f",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_016000.pt"
+  },
+  "run/ckpt_016500.pt": {
+   "sha256": "7f5936bbf0ca60a5383b3192c4d0e0bc3949d2e1b827616dbc6384b75d940eaf",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_016500.pt"
+  },
+  "run/ckpt_017000.pt": {
+   "sha256": "1de50fcfbadb71d9415eb34da95ca9feb34372064cb925b975cca414b30c5ee3",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_017000.pt"
+  },
+  "run/ckpt_017500.pt": {
+   "sha256": "e1ad6e3b45ff3c89d6c2c4db2fcb6c14dd99a77771bd7fbeed5614223d7e52c0",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_017500.pt"
+  },
+  "run/ckpt_018000.pt": {
+   "sha256": "6e32691c6bcd7380c46e29b17f74f8a83618b28883bc6e58fa73caded1cf9d95",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_018000.pt"
+  },
+  "run/ckpt_018500.pt": {
+   "sha256": "4a93b915b1897ca11fa236cb05f394c6a6d4580906567bf3bde50e37fdb05ef8",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_018500.pt"
+  },
+  "run/ckpt_019000.pt": {
+   "sha256": "632da3159164c2597c54ae5a9876b3625168264508fa31507ebf359a8e7cac72",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_019000.pt"
+  },
+  "run/ckpt_019500.pt": {
+   "sha256": "e6283430e799d49e4f0d1fae38f454c1105cb610ec69ec9174439d9d6018dae0",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_019500.pt"
+  },
+  "run/ckpt_020000.pt": {
+   "sha256": "66e41e1193fe96708d8f9d59eac110fed97183d8946fcfcfde2353300789ce4f",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_020000.pt"
+  },
+  "run/ckpt_020500.pt": {
+   "sha256": "8e808e495b9c781d074246ea064223963363644ba43d172904978cbae57ee7ed",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_020500.pt"
+  },
+  "run/ckpt_021000.pt": {
+   "sha256": "2175b3db28e0cfabeb1790f2b35882bc24f03a20bb439c717b697a9c895be2d7",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_021000.pt"
+  },
+  "run/ckpt_021500.pt": {
+   "sha256": "ee31b6296cc2edfe494faf39c803bc9e46a40910301d22c6f8a8228d7e4d464f",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_021500.pt"
+  },
+  "run/ckpt_022000.pt": {
+   "sha256": "55955c0e04d046083b20ba6dde5ec230eda5a96924f1d7f966f80d4bafc56a9b",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_022000.pt"
+  },
+  "run/ckpt_022500.pt": {
+   "sha256": "96692afde2471019dae33324f106e53c760458c487e9fc61c85e450f986d562f",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_022500.pt"
+  },
+  "run/ckpt_023000.pt": {
+   "sha256": "087ed56da0abde872f9c5df35847309488e2171c6258ced9920ca0e4622f1df2",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_023000.pt"
+  },
+  "run/ckpt_023500.pt": {
+   "sha256": "67db5ffdbba211fd02196644151d2956cbfa740f99db9472e41c57dee9fbaf68",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_023500.pt"
+  },
+  "run/ckpt_024000.pt": {
+   "sha256": "916f028a224be7e86eb2dbcc67d0f295e867a69282e0545808884d5133b6f247",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_024000.pt"
+  },
+  "run/ckpt_024500.pt": {
+   "sha256": "5709a50a5f84b32307df4fc509b5e3b9fcd6a1435bda678323778bd907628dd0",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_024500.pt"
+  },
+  "run/ckpt_025000.pt": {
+   "sha256": "bf5b8f0a8e10b088eedd97b259f36ae48659da4f0783290c0db4143fc883a6f7",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_025000.pt"
+  },
+  "run/ckpt_025500.pt": {
+   "sha256": "1dcd85730c425073d27df3347f67b7fa1380905e1840d0e299e48bcc8495d58a",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_025500.pt"
+  },
+  "run/ckpt_026000.pt": {
+   "sha256": "62deea6deff24e2748c7866f5cb95056e71041b01b16393a9de1cd1e5cb80cec",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_026000.pt"
+  },
+  "run/ckpt_026500.pt": {
+   "sha256": "eab9d24008eaedb4575f6ebb3b0153d07cc939f583029860be5cc581d3db0dbe",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_026500.pt"
+  },
+  "run/ckpt_027000.pt": {
+   "sha256": "22fe5ffe409eed2560fc0a01d87428e864b815571183d940682db0e6ae312613",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_027000.pt"
+  },
+  "run/ckpt_027500.pt": {
+   "sha256": "bf57466f1fa1350055fdca670ed31850460a6dd61e7fdec0981489bd556d055e",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_027500.pt"
+  },
+  "run/ckpt_028000.pt": {
+   "sha256": "1daa3831464ad55ffd57cf408af645ccb37e495bd535cbe517f0263282fbd679",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_028000.pt"
+  },
+  "run/ckpt_028500.pt": {
+   "sha256": "72e89df1ca9517ed98cb02dbf12190ff35b8a4cf38f05571896b45210a48ea4f",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_028500.pt"
+  },
+  "run/ckpt_029000.pt": {
+   "sha256": "cd7a36081936d80c03722c54549ec56531517df10969196fce7cf78e55fe6fcb",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_029000.pt"
+  },
+  "run/ckpt_029500.pt": {
+   "sha256": "71d3db0518e29786b87a25de7478471d41ddf0c6d0c42732d0571d4c9c2d0a16",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_029500.pt"
+  },
+  "run/ckpt_030000.pt": {
+   "sha256": "6ee1827d14f2a7446fb7094c4646618822e07fff6c8b2d5f7438255914e0e2ea",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_030000.pt"
+  },
+  "run/ckpt_030500.pt": {
+   "sha256": "14c263a2c3d76abe8673cd46d3b6c438c191cbc1c7ae13cb4cd5215fd50e52e1",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_030500.pt"
+  },
+  "run/ckpt_031000.pt": {
+   "sha256": "f5d015fb962197f424b659cd658d290ec6d2f902b2f0716fe4aade6ec7cadbb9",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_031000.pt"
+  },
+  "run/ckpt_031500.pt": {
+   "sha256": "f87f48f01f4df448a2e1199d938fb42838760a2ef06c0f31ed588f95c954089f",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_031500.pt"
+  },
+  "run/ckpt_032000.pt": {
+   "sha256": "da123d3fe4eb88d29f1416ec93fe01c2b1551001a6c07e5a636982f9b3bee07b",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_032000.pt"
+  },
+  "run/ckpt_032500.pt": {
+   "sha256": "c5af5d91c97fae21361a83b0be4bbc50eb8715430ea3bc958945e50564b3195c",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_032500.pt"
+  },
+  "run/ckpt_033000.pt": {
+   "sha256": "9b24bd4bebfc789aabfa2d5e889b185dd4481a80d84f329555df04b078a3ed5e",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_033000.pt"
+  },
+  "run/ckpt_033500.pt": {
+   "sha256": "96c7c72cefce72171a2ed1776d1e48afa17150808bfcc7252b863b2aad74b973",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_033500.pt"
+  },
+  "run/ckpt_034000.pt": {
+   "sha256": "9fb1b17c4a79fb49b70ec43b8901416765bf88d16609a23a9b3d8947d9ae1fe8",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_034000.pt"
+  },
+  "run/ckpt_034500.pt": {
+   "sha256": "b7ec41bd23f3d5280aaa6bf91d5473c0bb425c3d31926ea8c3fb1c4c434a1995",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_034500.pt"
+  },
+  "run/ckpt_035000.pt": {
+   "sha256": "4976bc3a5b1d2f15e29788fbd2c538bf3321b79de1c117b0b8b0b9bbc0a5bada",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_035000.pt"
+  },
+  "run/ckpt_035500.pt": {
+   "sha256": "19b532dd7928840133cec17695a604bedfe105f9f395021c21253f1be33e9600",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_035500.pt"
+  },
+  "run/ckpt_036000.pt": {
+   "sha256": "37b5a2573c8bfefd7859b1cbfc20d2dcf057ba341a74739c6551bf2335c3cfa5",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_036000.pt"
+  },
+  "run/ckpt_036500.pt": {
+   "sha256": "702a657897da87347cdf5376c87f33db0158c0de4a3e77d1add65f1745fe9933",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_036500.pt"
+  },
+  "run/ckpt_037000.pt": {
+   "sha256": "d6631d77c8b694c56ee9aa71857cf5d23ebd55ad1d4f8d13a62df9e65fe93de4",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_037000.pt"
+  },
+  "run/ckpt_037500.pt": {
+   "sha256": "fb2c3c29309b067daffdbc84e8807cb884a7191f3d2be1770370b298564a45fc",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_037500.pt"
+  },
+  "run/ckpt_038000.pt": {
+   "sha256": "10142f44d18b93ad6eecb67a4c923a81f9196e84945be658ed63a2a8f7a3b63d",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_038000.pt"
+  },
+  "run/ckpt_038500.pt": {
+   "sha256": "05d9a614f949c09f62b5aaf205176a1697b57e0f88e960017b193bcc671acbdf",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_038500.pt"
+  },
+  "run/ckpt_039000.pt": {
+   "sha256": "3089d01e1a012e1655bfc9908abe78fc7dbe9c6faec5378921b20da5f6e298cf",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_039000.pt"
+  },
+  "run/ckpt_039500.pt": {
+   "sha256": "d9d657e8fef3f3d2840758d4be128014301a6a537e4fc90b959faad90b28c621",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_039500.pt"
+  },
+  "run/ckpt_040000.pt": {
+   "sha256": "ac81b6c6578b9432620d4bdacaedb938e1ba3c54e8c49d2abf9069e9dfc85198",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_040000.pt"
+  },
+  "run/ckpt_040500.pt": {
+   "sha256": "f0dd9895da6cbd2b47a34bb97eb4ba3bf599635f8f6e86bdef3411e2743b218a",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_040500.pt"
+  },
+  "run/ckpt_041000.pt": {
+   "sha256": "fc52485268dabb2739124a897b9dc6c523229a32651d4adccb9eab8ebce3a61b",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_041000.pt"
+  },
+  "run/ckpt_041500.pt": {
+   "sha256": "cd8e10a6564966cf2ef8aa1f45361051cadf576222537588fd222b8eff255759",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_041500.pt"
+  },
+  "run/ckpt_042000.pt": {
+   "sha256": "5948b09e97755f7966a7cc1bf1eb244e409d34def1ec5bb7ee74744c3f2b3a77",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_042000.pt"
+  },
+  "run/ckpt_042500.pt": {
+   "sha256": "922960773d122f10c85a368b2842a1215ee6835698f142e40ed4e5e839a55bfa",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_042500.pt"
+  },
+  "run/ckpt_043000.pt": {
+   "sha256": "58769463d28fc5b854a6ccf6d642537042bf3c768926cce33c40251c520ba4cc",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_043000.pt"
+  },
+  "run/ckpt_043500.pt": {
+   "sha256": "1cc769bff4cc9e5962c192c01d1ec9fbdce4aeb87e29731cd5fb94474ba655a3",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_043500.pt"
+  },
+  "run/ckpt_044000.pt": {
+   "sha256": "a564916998341887f46c45bed994750aca56a13f58e58cefa42e315f6b0eddc8",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_044000.pt"
+  },
+  "run/ckpt_044500.pt": {
+   "sha256": "45886302a82fd2018a78c9b33607193a59fcfb1e33915f9783c145ab06cbe773",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_044500.pt"
+  },
+  "run/ckpt_045000.pt": {
+   "sha256": "4c7681c78e4cc0b07207345893a98a58733074262b290554639c83e56afc5489",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_045000.pt"
+  },
+  "run/ckpt_045500.pt": {
+   "sha256": "8444b33aa7181aa1d534a68c1c28970ef6fa0994462ab0be973223d3ede9965d",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_045500.pt"
+  },
+  "run/ckpt_046000.pt": {
+   "sha256": "8568e32d32bbc3663ba99eda5c9f413fbe1939fcd2044767c6208be2a88fbb79",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_046000.pt"
+  },
+  "run/ckpt_046500.pt": {
+   "sha256": "706dea3cc61beeeb57109db33f1895ca2b731bd8709aa2a0a3aedd90317f2651",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_046500.pt"
+  },
+  "run/ckpt_047000.pt": {
+   "sha256": "7c8f0f3f7b7a225d043bf756f21d48dc7d8e65d7ddb907893c93ef701839f9a5",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_047000.pt"
+  },
+  "run/ckpt_047500.pt": {
+   "sha256": "814d6787e68bc8be05377bdcace24596162ff6a3586418c3b16a424085cc2b8e",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_047500.pt"
+  },
+  "run/ckpt_048000.pt": {
+   "sha256": "573949e8ef71bb229c60f82298b73cf3742265458e197bc33fc5ff757b6eaf22",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_048000.pt"
+  },
+  "run/ckpt_048500.pt": {
+   "sha256": "5c74a21c683d677dd6b8467381167a259818e452fd27fc1fcf60024c1ca61f72",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_048500.pt"
+  },
+  "run/ckpt_049000.pt": {
+   "sha256": "36a1a75051079e1168b3123dd6b0f86cc3253dcdd1c632dfdce7d281d38e824a",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_049000.pt"
+  },
+  "run/ckpt_049500.pt": {
+   "sha256": "3c0e31c5bfa2da69da83085a9c180999c7541716fb871db8fa2e5bda0d89ee38",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_049500.pt"
+  },
+  "run/ckpt_050000.pt": {
+   "sha256": "f82e1368bf81c5e8d9439b5fe469c649b4e987d5c11fab67ca2299c77d0dd3d3",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_050000.pt"
+  },
+  "run/ckpt_050500.pt": {
+   "sha256": "ed9f73d13dd058ce20a659a6aef3fe69bfc58fdd2c0fee94c97cf78f0bedecb6",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_050500.pt"
+  },
+  "run/ckpt_051000.pt": {
+   "sha256": "1db2c077cb7ff0759057e920b51741011ef44afafe11e4a93d3058457ac9fa9b",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_051000.pt"
+  },
+  "run/ckpt_051500.pt": {
+   "sha256": "c72dee35780d258cc7cfec49547f8defeae752ba92a14edc7a5524476b7cd4eb",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_051500.pt"
+  },
+  "run/ckpt_052000.pt": {
+   "sha256": "2748b0802907f47153fff901ea6798cdce54a188491ef5608c10f91eb09f44f3",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_052000.pt"
+  },
+  "run/ckpt_052500.pt": {
+   "sha256": "bf46994739985d37f7276576127a0b8c452e2e76ab90d014d20442e93bcd98df",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_052500.pt"
+  },
+  "run/ckpt_053000.pt": {
+   "sha256": "b10a17f60012824a06c064dc670fcf1d2727950504cf613aa6eff094082fcce1",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_053000.pt"
+  },
+  "run/ckpt_053500.pt": {
+   "sha256": "63b218b31ade9daf2c7c2f545d1e8df7547e5e0889fdb769a06965844284da93",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_053500.pt"
+  },
+  "run/ckpt_054000.pt": {
+   "sha256": "e2f0cb9b0b7d779e036bc0da6ec33873aa38520a287cb00f5c356891452dbde7",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_054000.pt"
+  },
+  "run/ckpt_054500.pt": {
+   "sha256": "b765713fa63cf18d0c0f997525c9ffc3f06d9044e6db657bacac6c9fd729cd36",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_054500.pt"
+  },
+  "run/ckpt_055000.pt": {
+   "sha256": "40b5f53d224590da428d108aba8b08f80d53b3f72a1a490d662e94b880fac8da",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_055000.pt"
+  },
+  "run/ckpt_055500.pt": {
+   "sha256": "827f1ea6aa0b2b742da3df0b1360bfbdea9e497d1d7532894c47026447dae5b0",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_055500.pt"
+  },
+  "run/ckpt_056000.pt": {
+   "sha256": "55cd64452f1303ed0aa19ec09816f515919a02f9d32f122a60232e78c2d30a33",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_056000.pt"
+  },
+  "run/ckpt_056500.pt": {
+   "sha256": "bac11c2304a8b4d065f1a15c254b3a64dea2bef11466f3a90d0ea23afb7d5059",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_056500.pt"
+  },
+  "run/ckpt_057000.pt": {
+   "sha256": "24f4dfff03b725134ba2f8bc71c0e78a8387b64fc885f30e83390c66b7f4b687",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_057000.pt"
+  },
+  "run/ckpt_057500.pt": {
+   "sha256": "ed93f3fe7b6ca63836200f87b318e4c877af34688fdf9f5fc2bb35ee55bb242b",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_057500.pt"
+  },
+  "run/ckpt_058000.pt": {
+   "sha256": "e609c0ea7f856663b07616b65d0ad2a4f6aff208d56bb118cb7d1a3fbd35932c",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_058000.pt"
+  },
+  "run/ckpt_058500.pt": {
+   "sha256": "67c55b2d73d6efac390b34485df39e7192704991dd41ead741e7eaec277f319b",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_058500.pt"
+  },
+  "run/ckpt_059000.pt": {
+   "sha256": "97c6f6b16824ce44adeba9243a206f42f2b91efd65e6a9c9f16b8a7162cefdc9",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_059000.pt"
+  },
+  "run/ckpt_059500.pt": {
+   "sha256": "c71b31d0e195e24656b3b9091a2962951d8baf2e89afa15cbb5146f9ff6dd629",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_059500.pt"
+  },
+  "run/ckpt_060000.pt": {
+   "sha256": "47ff8936f0d3148aa46a6c88c99f5eb2ffc59e23fefe2463b3ffc2dd3c1b5fb2",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_060000.pt"
+  },
+  "run/ckpt_060500.pt": {
+   "sha256": "3f7c08eadcabab0c8cabacb39c45844707a5ffa4d9b0e9ca5877e8f7267f4b6e",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_060500.pt"
+  },
+  "run/ckpt_061000.pt": {
+   "sha256": "77d0429ecfd4c44a460fcdcf1883a0805b7046ecbf187ada87654e94822b37df",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_061000.pt"
+  },
+  "run/ckpt_061500.pt": {
+   "sha256": "0da6f5242fa009da45eb877912074e2493fb53758936ab364c960518e5742aaa",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_061500.pt"
+  },
+  "run/ckpt_062000.pt": {
+   "sha256": "f5f9434f93a9195ca9d0c3e335d5a4cc828d757be30f3d5b0ea645072dd1a424",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_062000.pt"
+  },
+  "run/ckpt_062500.pt": {
+   "sha256": "39bd9d978e2d3f31d172dcb78720d1cf88c4c75ed0ef39056dc27727b2d7bd8c",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_062500.pt"
+  },
+  "run/ckpt_063000.pt": {
+   "sha256": "7d6a32756afd80190dd19030d506f0195a07aeee8f20931f42e86c35b7ad55ce",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_063000.pt"
+  },
+  "run/ckpt_063500.pt": {
+   "sha256": "7a2911faf38040ed7f0cc8e98467a0fed6db350fc5412adf2b879d5ceddfff7b",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_063500.pt"
+  },
+  "run/ckpt_064000.pt": {
+   "sha256": "053338d515a040bae72270ad5fd278101d26fd1ad5741876b7f00124fbf5ce1b",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_064000.pt"
+  },
+  "run/ckpt_064500.pt": {
+   "sha256": "c905938b1c3c7b5a0f8375829adada7164ed584724f24ca9eaa8e5d8a9b7f3ea",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_064500.pt"
+  },
+  "run/ckpt_065000.pt": {
+   "sha256": "6471373ebe41155cabeba660f19f37f267fdba16b96aa2627fd3aec2077785c5",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_065000.pt"
+  },
+  "run/ckpt_065500.pt": {
+   "sha256": "a3e3122d6dd683a92c0377f48438988515fde8edeb88b7450d4efb98365c7f65",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_065500.pt"
+  },
+  "run/ckpt_066000.pt": {
+   "sha256": "5e9e0e8ce3ff596cb4d9ac22d0943e3b4f5551b3952d8a5ab9549af69fe567fc",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_066000.pt"
+  },
+  "run/ckpt_066500.pt": {
+   "sha256": "9fb67211d48ef8ee48106aebbdf422d996c911a81470b5825cb7a3298ce5d205",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_066500.pt"
+  },
+  "run/ckpt_067000.pt": {
+   "sha256": "7cabb21becaab38037e301f8b2581dad645260da391e2715db6f5b965375b182",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_067000.pt"
+  },
+  "run/ckpt_067500.pt": {
+   "sha256": "1956f13e4af1c1b8253c8b8f9d386564554b947ed524420a75bf5f21c6357df0",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_067500.pt"
+  },
+  "run/ckpt_068000.pt": {
+   "sha256": "755f3f27e55faed6aa273d263bef68cffeb5281b5515ae1d461f3c6f7caa36c8",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_068000.pt"
+  },
+  "run/ckpt_068500.pt": {
+   "sha256": "1e3e44b9bca505903bdf3cdc7b48aa0cb00feeb49e2f14b0ee02cd9e406916c5",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_068500.pt"
+  },
+  "run/ckpt_069000.pt": {
+   "sha256": "34b1dd39843560a0b54a5a10778d0315906c96e089e61b1ba0d42017b511176e",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_069000.pt"
+  },
+  "run/ckpt_069500.pt": {
+   "sha256": "7e343069b8a8b84489e771840efea2272e098cfd8917631b9d36be45402b01a3",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_069500.pt"
+  },
+  "run/ckpt_070000.pt": {
+   "sha256": "c7f98a5ccdc0d84ea8b968a697c2424428359a3655a4ab2f527a03aaed6f50e5",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_070000.pt"
+  },
+  "run/ckpt_070500.pt": {
+   "sha256": "ed18acd68bbd8572a9ca59e3c1624a5fb6022fcca82514a73a62c5081a22522a",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_070500.pt"
+  },
+  "run/ckpt_071000.pt": {
+   "sha256": "b47df9189aefa33f3e85ab4ba63249b77afe99404e76e7d7d3e27ffacd0ddd98",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_071000.pt"
+  },
+  "run/ckpt_071500.pt": {
+   "sha256": "278b31f9eece945124698948e4b576519f29303c2dddb13e0d14383efc5c5d7d",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_071500.pt"
+  },
+  "run/ckpt_072000.pt": {
+   "sha256": "ddbd280ca5a252dd81d12b599561c0f64d049fe41e82d0595cd18f5262d64263",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_072000.pt"
+  },
+  "run/ckpt_072500.pt": {
+   "sha256": "70b6ab30e612aae402fa78d128e738f7744833a29d462fddfa8acbdd6e8a8c21",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_072500.pt"
+  },
+  "run/ckpt_073000.pt": {
+   "sha256": "806e54d716ed59cb70482521fd91da3216c01f86f6e068bd19f2b6e7f5ee5e98",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_073000.pt"
+  },
+  "run/ckpt_073500.pt": {
+   "sha256": "27db1e8f871030d3424f0b46dc43812b3a982955bee73893b81ee881f8333495",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_073500.pt"
+  },
+  "run/ckpt_074000.pt": {
+   "sha256": "ed443b92e9ed00267fee888a7e7999f5caf6a383569366f513cc75a125f8243c",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_074000.pt"
+  },
+  "run/ckpt_074500.pt": {
+   "sha256": "044edeb434064ff9a20f3e1c751a00e947adfc18a6df9878f810d308866e3b56",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_074500.pt"
+  },
+  "run/ckpt_075000.pt": {
+   "sha256": "f4d0c3daf6ee6955cb45a85482098cfb0c72695d2ebf42c3e2eaf98d2fad84ca",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_075000.pt"
+  },
+  "run/ckpt_075500.pt": {
+   "sha256": "457715962af4472d75d59eeaeb4b717844be4fd234c6f8610b58b28a4709ac98",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_075500.pt"
+  },
+  "run/ckpt_076000.pt": {
+   "sha256": "13452d46d8e0761aaa3c150d7a9a40babace0f8cdb41095ff033be665765f136",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_076000.pt"
+  },
+  "run/ckpt_076500.pt": {
+   "sha256": "e0c0eab4cab09c96211b9b347063e946e81f1a0e772f208414145357216ba5c4",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_076500.pt"
+  },
+  "run/ckpt_077000.pt": {
+   "sha256": "3d6025cf50111bfa881abef07879f872c6ce4479126fac5c6079588d58461ac1",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_077000.pt"
+  },
+  "run/ckpt_077500.pt": {
+   "sha256": "176097b9ad88d26d668a8df8ba62056d8842ff56ffb459e845f6c89354203d9d",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_077500.pt"
+  },
+  "run/ckpt_078000.pt": {
+   "sha256": "26eafa3ff195d2a12316e3842280146a6aefaa408f8462ffa04055e51e54ecc3",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_078000.pt"
+  },
+  "run/ckpt_078500.pt": {
+   "sha256": "caa3f7af17e1fee216d89adecc35c95cbe41a07c0beb11d5db39909a36decb79",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_078500.pt"
+  },
+  "run/ckpt_079000.pt": {
+   "sha256": "c37a99e0fcb02c62a5442688651b106053de5bdea5b49fe2ab18d2578865ea2f",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_079000.pt"
+  },
+  "run/ckpt_079500.pt": {
+   "sha256": "4c871badec582fe3aa0e52f72b5e8d26f9db2954a3ccb712dbc41e0b41a3288c",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_079500.pt"
+  },
+  "run/ckpt_080000.pt": {
+   "sha256": "31f77c343f3df965d691610220d7e3e7fd429e3aefc86777b5433fe4406321ea",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_080000.pt"
+  },
+  "run/ckpt_080500.pt": {
+   "sha256": "58c7cb7d6726c88453063c92fbab869fe650771a5922e20c0dc6a09f85b78bbb",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_080500.pt"
+  },
+  "run/ckpt_081000.pt": {
+   "sha256": "cf0d7bb8edf18c63e7c5c54d8a8aa2e9df6e1d590c781d4b46c3fd5731724c83",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_081000.pt"
+  },
+  "run/ckpt_081500.pt": {
+   "sha256": "2417d4c57c457bf2223d1cb8742b849f366a6af7703c5f3ce06c4d102ac81406",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_081500.pt"
+  },
+  "run/ckpt_082000.pt": {
+   "sha256": "d4a2c44d6fe739a974f44fa756cac5c53da1533494c9c01720e486f97284f22d",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_082000.pt"
+  },
+  "run/ckpt_082500.pt": {
+   "sha256": "67ea59fbd78b0fc13ee642585aac51c351881644a285984970c7c2f462173f10",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_082500.pt"
+  },
+  "run/ckpt_083000.pt": {
+   "sha256": "440207ddcf70d8e4602e7836c7fbee31d20a4dab0e5c3a0611d8e1b0e846acac",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_083000.pt"
+  },
+  "run/ckpt_083500.pt": {
+   "sha256": "0b89c61957dcc9ac685be2705f6a5b04decff8a322a06d5ed0d18e2097919e6e",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_083500.pt"
+  },
+  "run/ckpt_084000.pt": {
+   "sha256": "fdda5dbfbe9733198f327ee6700f8efaf2b106d07cb1937dfb65fe1db267e00e",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_084000.pt"
+  },
+  "run/ckpt_084500.pt": {
+   "sha256": "1d1517d944a6dbddeea3a0caab5192cdb92dd402df69a5cc7b01fbb90ec06740",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_084500.pt"
+  },
+  "run/ckpt_085000.pt": {
+   "sha256": "e6cece27ac62080f0db58e9fa26b55207bdbee6ba6a6f10e68a4f561d333c105",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_085000.pt"
+  },
+  "run/ckpt_085500.pt": {
+   "sha256": "17551036e75f4d55d4a2ab03ac443657f88ca6629d5d979e14ac8a702c8d5493",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_085500.pt"
+  },
+  "run/ckpt_086000.pt": {
+   "sha256": "85ef808fea99460069224ba843626a7516cd8838d2ed00f4c3c9a4aeba2f37d8",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_086000.pt"
+  },
+  "run/ckpt_086500.pt": {
+   "sha256": "a9ccbec832b81e9051496996e5d2126dbaa29fabd3ea770973f48203c654c479",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_086500.pt"
+  },
+  "run/ckpt_087000.pt": {
+   "sha256": "138ff9a8eb18863559bd18e51255ff2b3ba5d7d356cff631aef26aeda509640d",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_087000.pt"
+  },
+  "run/ckpt_087500.pt": {
+   "sha256": "af9e5b8652ba3c308fc0b4eb0c1000bfac6e6080791f91a9fbf62fa55d378f05",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_087500.pt"
+  },
+  "run/ckpt_088000.pt": {
+   "sha256": "3532f97c24160f23d3bdd05a3a0bcf531fdfb901e9bba5be592fd008ad8e36e3",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_088000.pt"
+  },
+  "run/ckpt_088500.pt": {
+   "sha256": "5afceba17b806aac6c5a831a39b0440544a92b0fe4acc1cac2638363aa743637",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_088500.pt"
+  },
+  "run/ckpt_089000.pt": {
+   "sha256": "1af6c4c0f408a68c7107b5c5e67f38f91e03a96dee67b90b681ce7237d283fa2",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_089000.pt"
+  },
+  "run/ckpt_089500.pt": {
+   "sha256": "9b47549be42fe16c67d38a5cc62ed446ac9cd0fc9c16ac7dbfd18f9d6d67b736",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_089500.pt"
+  },
+  "run/ckpt_090000.pt": {
+   "sha256": "da322a20f0935bd93589523633d1edad4dd5b302422d9e3eed5b870a3ca563c0",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_090000.pt"
+  },
+  "run/ckpt_090500.pt": {
+   "sha256": "56b9bf6adee6f9472249bc0af04579cce6ce4ecc5fa34e441854eb0fe48f2593",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_090500.pt"
+  },
+  "run/ckpt_091000.pt": {
+   "sha256": "a59270072a65bd108781b26134a48973c8cbc32aac7a30cb60f08d53afa15e72",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_091000.pt"
+  },
+  "run/ckpt_091500.pt": {
+   "sha256": "f34e76a0f40613eb45f9558a80e07c46c3118f447da5514537d0c4f6f9144faa",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_091500.pt"
+  },
+  "run/ckpt_092000.pt": {
+   "sha256": "6576e8373c46ea535bf760c38a8282a8026394d0be3eea762b7a22b68623447a",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_092000.pt"
+  },
+  "run/ckpt_092500.pt": {
+   "sha256": "d7d700ea12fef9a6e78cb74eecccc191c241ca5047694193d914a0fbca8097aa",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_092500.pt"
+  },
+  "run/ckpt_093000.pt": {
+   "sha256": "88cef61e00355eb274cb701cdf50c0a78d8ea66cfa2f12d399947a4350b9322c",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_093000.pt"
+  },
+  "run/ckpt_093500.pt": {
+   "sha256": "6ffd949cfc2f661adbd155b156c6438b3b6b1ce91ae4380c3773a0ad2fb17607",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_093500.pt"
+  },
+  "run/ckpt_094000.pt": {
+   "sha256": "7ae17aa51fb8d2cffcf92066b21c8d66106257ea648f03da8b323b65b5a11ba6",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_094000.pt"
+  },
+  "run/ckpt_094500.pt": {
+   "sha256": "1c783d8f19ec95713041f3c4761fe5a868798d1c745f5ff00515fb32d708c40e",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_094500.pt"
+  },
+  "run/ckpt_095000.pt": {
+   "sha256": "8bb1d645ba4340f113062066c6bd17f3c4a93519d34c4cd9026bf9123e594942",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_095000.pt"
+  },
+  "run/ckpt_095500.pt": {
+   "sha256": "b295325ac346f2706a82bb76d2318cc6d773aac9fd196c7499c38640e663e4d3",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_095500.pt"
+  },
+  "run/ckpt_096000.pt": {
+   "sha256": "4313e0e9fd6c6b5443b1428079dfc30dcbd93a2d3b8091e3c2cbc83aa92fe493",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_096000.pt"
+  },
+  "run/ckpt_096500.pt": {
+   "sha256": "fe3ab967baf6464817a7fb6cac0500240cc6050dc423b6abe0d793e0f5aff81e",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_096500.pt"
+  },
+  "run/ckpt_097000.pt": {
+   "sha256": "828cb8f6840086644609e70284e4e459d6db633ed47557da5af57f97ecfdb1a4",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_097000.pt"
+  },
+  "run/ckpt_097500.pt": {
+   "sha256": "e6285a08bb6591fefe302b14abdef05160c54935c88607032111eda8a1323e2d",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_097500.pt"
+  },
+  "run/ckpt_098000.pt": {
+   "sha256": "62a5b4bcf98aee608081562a6bb0d6c8f81e2cae00ac9b5ec2e0c5781081058b",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_098000.pt"
+  },
+  "run/ckpt_098500.pt": {
+   "sha256": "8379d993ef37d73885be8e50113af0a62661ae12637fd0646e7886729620116a",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_098500.pt"
+  },
+  "run/ckpt_099000.pt": {
+   "sha256": "5111f8e9b06e4ab2ac5aab926bf0dc2556278243f0c68d013eb923c2f1d2c6d2",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_099000.pt"
+  },
+  "run/ckpt_099500.pt": {
+   "sha256": "2377f772708f45f50aef662c0c998824ee0ff353a355a1f456c1fb04e33be440",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_099500.pt"
+  },
+  "run/ckpt_100000.pt": {
+   "sha256": "b83343f9cdb0e2b4fbe56ec462cd08f473d6860cd8463b8a7feb3c768ba3b93a",
+   "bytes": 735237,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_100000.pt"
+  },
+  "run/ckpt_adam_final.pt": {
+   "sha256": "6049ebadc9ce3094991e6d0677b865cadcbb18a36b5f2f249491087e58867b32",
+   "bytes": 735573,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_adam_final.pt"
+  },
+  "run/ckpt_final.pt": {
+   "sha256": "3345c50c988228e40f4690f930812d3a89e6fed1cbe62acf44c7ce41561ee457",
+   "bytes": 735153,
+   "source": "runs/ansatz_epsuv1e-2/ckpt_final.pt"
+  },
+  "run/config.json": {
+   "sha256": "a971d58b4b8ff49ede2bdb609f8a462068b21bc1b621a24c4ea34b9e7632da0f",
+   "bytes": 599,
+   "source": "runs/ansatz_epsuv1e-2/config.json"
+  },
+  "run/log.jsonl": {
+   "sha256": "00d7820109b35aa8e6aa1080aca1747c7b2ca2819adcd3550ac8cb65e5033e32",
+   "bytes": 1584419,
+   "source": "runs/ansatz_epsuv1e-2/log.jsonl"
+  },
+  "artifacts/fig4.png": {
+   "sha256": "0f0a5b5efe925b75ebcd691e6dc4b361edb72093c7fa2121e414779fb16de5f6",
+   "bytes": 143777,
+   "source": "docs/fig4.png"
+  },
+  "artifacts/fig5.png": {
+   "sha256": "12a3045aef7a90d39fd103f24dfc2068dd7ab596a79a96d3fc87c594eefb9030",
+   "bytes": 330537,
+   "source": "docs/fig5.png"
+  },
+  "artifacts/fig6.png": {
+   "sha256": "24cf24c4f94334abfd105ea2032f4a077af132db56f414e5dffbed3d41cda35c",
+   "bytes": 779135,
+   "source": "docs/fig6.png"
+  },
+  "artifacts/fig7.png": {
+   "sha256": "020a0ba05dbb4d46e20c4b05c2a2c489248636b2692ae39191bdf9bc7d17888e",
+   "bytes": 143054,
+   "source": "docs/fig7.png"
+  },
+  "artifacts/fig6_elastic_check.json": {
+   "sha256": "3260c2de4744499fd604ccad2f435315ebce93c96fa1db73f535b47bd9e08753",
+   "bytes": 3439,
+   "source": "docs/fig6_elastic_check.json"
+  },
+  "artifacts/verify_nguyen_raudkivi.json": {
+   "sha256": "2adc866979ceae109b6a3252904bc1785f243e74cb2538db9e0e5df13b8b8232",
+   "bytes": 6194,
+   "source": "docs/verify_nguyen_raudkivi.json"
+  },
+  "artifacts/DECISIONS.md": {
+   "sha256": "67d78cc0c0d89cf42f94ca37984ab9d6d99fdf935fa11c664593ab9541303cd7",
+   "bytes": 52601,
+   "source": "DECISIONS.md"
+  }
+ }
+}
