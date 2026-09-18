@@ -17,7 +17,6 @@ REM D-5.5 admissible metric: min_tag primary, tag:Mk_d secondary - recorded, not
 REM D-5.6 baseline-v1 is for code validation and smoke sweeps ONLY. Before headline
 REM       numbers: scripts\run_production_baseline.bat, then point BASELINE at it.
 REM       Results on baseline-v1 are marked validation_only by collect_results.py.
-set BASELINE=runs\ansatz\exp_seed7\ckpt_final.pt
 set SIG3_LO=0
 set SIG3_HI=179000
 set ADM_METRIC=min_tag
@@ -34,11 +33,11 @@ REM ===== STILL OPEN - see DECISIONS.md "Still open after Day 41" =====
 REM YIELD_NORM   raw or ref ONLY. These are the two modes ssr_sweep.py has.
 REM              The smoke stage runs both.
 REM FIG9_STATE   failed or stable - which end of the SRF bracket, not a time
-set YIELD_NORM=CHANGE_ME
-set FIG9_STATE=CHANGE_ME
 REM ===========================================================================
 
-set BASE=--baseline %BASELINE% --admissible-metric %ADM_METRIC% --admissible-secondary %ADM_SECONDARY%
+set BASELINE=runs\ansatz_epsuv1e-2\ckpt_final.pt
+set YIELD_NORM=raw
+set FIG9_STATE=failed
 set GHB=--criterion GHB --sig3-lo %SIG3_LO% --sig3-hi %SIG3_HI%
 REM Smoke runs never bisect, so their drop threshold only decides an early stop.
 REM 0.5 is a placeholder recorded in result.json with smoke=true, and

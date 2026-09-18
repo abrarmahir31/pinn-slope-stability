@@ -11,16 +11,17 @@ REM
 REM ===== DECIDED - DECISIONS.md D-5.7 =====
 set ANSATZ=cap
 set LBFGS_EPOCHS=500
+set SEED=7
+set OUT=runs\ansatz_epsuv1e-2
+set TAG=baseline-v2
 REM
 REM ===== OPEN - DECISIONS.md D-5.7 =====
 REM SEED   configs\production_labpc.args sets 20250812. In the D-A.1 ablation
 REM        the cap ansatz FAILED on exactly that seed: pde_richards ratio 0.418
 REM        against about 1e-5 on seeds 1234 and 7, psi pinned at the cap.
 REM        Set a seed deliberately. 20250812 is allowed if you accept that.
-set SEED=CHANGE_ME
 REM ===========================================================================
-set OUT=runs\prod_baseline_v2
-set TAG=baseline-v2
+
 
 if "%ANSATZ%"=="CHANGE_ME" (echo DECISION MISSING: ANSATZ cap or exp - D-A.1 & exit /b 1)
 if "%LBFGS_EPOCHS%"=="CHANGE_ME" (echo DECISION MISSING: LBFGS_EPOCHS & exit /b 1)
