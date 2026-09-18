@@ -1,0 +1,29 @@
+{
+ "segment_kinds": {
+  "natural_ground": "traction-free",
+  "bench": "traction-free",
+  "cut_face": "traction-free",
+  "pit_floor": "roller_x",
+  "base": "fixed",
+  "far_field_f1": "roller_x"
+ },
+ "shares": {
+  "Mk": {
+   "area": 0.03071666666666667,
+   "points": 0.25
+  },
+  "Mk_d": {
+   "area": 0.09791666666666662,
+   "points": 0.35
+  },
+  "Tm": {
+   "area": 0.8713666666666666,
+   "points": 0.4
+  }
+ },
+ "n_interior": 3000,
+ "seed": 20260808,
+ "cut_angle_deg": 31.06,
+ "x_crest_m": 102.1,
+ "z_base_m": 200.0
+}
