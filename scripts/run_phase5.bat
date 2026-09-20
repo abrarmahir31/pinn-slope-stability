@@ -64,7 +64,12 @@ if "%1"=="smoke" (
 )
 
 if "%1"=="probe" (
-  python scripts\ssr_sweep.py %GHB% %COMMON% --w-yield 1 --srf-step 0.05 --srf-max 2.0 --out runs\probe_calibrated
+  if "%YIELD_NORM%"=="CHANGE_ME" (echo DECISION MISSING: YIELD_NORM & exit /b 1)
+  REM COMMON is defined further down, after the guards, so it is NOT set here:
+  REM the calibrated flags are spelled out. Bisection, not a fine grid: 0.25
+  REM steps bracket the crossing and --bisect-tol 0.01 resolves it in ~8
+  REM evaluations instead of 20.
+  python scripts\ssr_sweep.py %GHB% %BASE% --yield-norm %YIELD_NORM% --admissible-mode %ADM_MODE% --admissible-floor %ADM_FLOOR% --plateau-factor %PLATEAU_FACTOR% --disp-factor %DISP_FACTOR% --w-yield 1 --srf-step 0.25 --bisect-tol 0.01 --srf-max 2.0 --out runs\probe_calibrated
   if errorlevel 1 exit /b 1
   python scripts\progress.py runs\probe_calibrated
   if errorlevel 1 exit /b 1
