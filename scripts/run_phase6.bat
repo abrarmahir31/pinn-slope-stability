@@ -11,7 +11,11 @@ REM ===== D-5.3 and D-5.5 are filled in. The rest stay open until Phase 5 is don
 set BASELINE=runs\ansatz\exp_seed7\ckpt_final.pt
 set YIELD_NORM=CHANGE_ME
 set ADM_METRIC=min_tag
-set ADM_DROP=0.15
+REM D-5.13 calibrated criterion - must match run_phase5.bat exactly
+set ADM_MODE=floor
+set ADM_FLOOR=0.50
+set PLATEAU_FACTOR=5
+set DISP_FACTOR=5
 set SIG3_LO=0
 set SIG3_HI=179000
 REM D-5.8: w_yield 1.0, conditional on the Phase 5 plateau holding
@@ -23,12 +27,12 @@ REM ===========================================================================
 if "%BASELINE%"=="CHANGE_ME" (echo DECISION MISSING: BASELINE & exit /b 1)
 if "%YIELD_NORM%"=="CHANGE_ME" (echo DECISION MISSING: YIELD_NORM & exit /b 1)
 if "%ADM_METRIC%"=="CHANGE_ME" (echo DECISION MISSING: ADM_METRIC & exit /b 1)
-if "%ADM_DROP%"=="CHANGE_ME" (echo DECISION MISSING: ADM_DROP & exit /b 1)
+if "%ADM_FLOOR%"=="CHANGE_ME" (echo DECISION MISSING: ADM_FLOOR - D-5.13 & exit /b 1)
 if "%SIG3_LO%"=="CHANGE_ME" (echo DECISION MISSING: SIG3_LO & exit /b 1)
 if "%SIG3_HI%"=="CHANGE_ME" (echo DECISION MISSING: SIG3_HI & exit /b 1)
 if "%W_REPORT%"=="CHANGE_ME" (echo DECISION MISSING: W_REPORT - the w_yield chosen from the Phase 5 plateau & exit /b 1)
 
-set RUN=python scripts\ssr_sweep.py --criterion GHB --sig3-lo %SIG3_LO% --sig3-hi %SIG3_HI% --baseline %BASELINE% --yield-norm %YIELD_NORM% --admissible-metric %ADM_METRIC% --admissible-drop %ADM_DROP% --w-yield %W_REPORT%
+set RUN=python scripts\ssr_sweep.py --criterion GHB --sig3-lo %SIG3_LO% --sig3-hi %SIG3_HI% --baseline %BASELINE% --yield-norm %YIELD_NORM% --admissible-metric %ADM_METRIC% --admissible-mode %ADM_MODE% --admissible-floor %ADM_FLOOR% --plateau-factor %PLATEAU_FACTOR% --disp-factor %DISP_FACTOR% --w-yield %W_REPORT%
 
 if "%1"=="arms" (
   if "%KS_STRATUM%"=="CHANGE_ME" (echo DECISION MISSING: KS_STRATUM Mk, Mk_d or Tm & exit /b 1)

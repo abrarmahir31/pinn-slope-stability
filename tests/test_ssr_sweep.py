@@ -390,3 +390,46 @@ def test_run_refuses_to_resume_with_a_different_setting(tmp_path, tiny):
     S.run(S.parse(argv))
     with pytest.raises(RuntimeError, match="refusing to resume"):
         S.run(S.parse(argv + ["--cold-start"]))
+
+
+# --- D-5.13: absolute admissible floor (calibrated criterion) ---------------
+
+def test_parse_floor_mode_requires_a_floor_and_rejects_a_drop():
+    base = ["--criterion", "GHB", "--baseline", "x", "--out", "o",
+            "--w-yield", "1", "--yield-norm", "raw",
+            "--sig3-lo", "0", "--sig3-hi", "1.79e5"]
+    with pytest.raises(SystemExit):
+        S.parse(base + ["--admissible-mode", "floor"])
+    with pytest.raises(SystemExit):
+        S.parse(base + ["--admissible-mode", "floor", "--admissible-floor", "0.5",
+                        "--admissible-drop", "0.15"])
+    a = S.parse(base + ["--admissible-mode", "floor", "--admissible-floor", "0.5"])
+    assert a.admissible_floor == 0.5 and a.admissible_drop is None
+
+
+def test_floor_mode_fires_on_the_absolute_value_not_the_drop():
+    a = _args(admissible_mode="floor", admissible_floor=0.5,
+              admissible_drop=None)
+    ref = {"total": 1.0, "disp": 1.0, "admissible": 0.738}
+    # Large drop but still above the floor -> not failed.
+    assert S._admissible_failed({"admissible": 0.582}, ref, a) is False
+    # Below the floor -> failed, whatever the drop.
+    assert S._admissible_failed({"admissible": 0.475}, ref, a) is True
+
+
+def test_drop_mode_is_unchanged_by_the_new_flag():
+    a = _args(admissible_mode="drop", admissible_drop=0.15,
+              admissible_floor=None)
+    ref = {"admissible": 0.738}
+    assert S._admissible_failed({"admissible": 0.582}, ref, a) is True
+    assert S._admissible_failed({"admissible": 0.700}, ref, a) is False
+
+
+def test_has_failed_still_needs_all_three_under_floor_mode():
+    a = _args(admissible_mode="floor", admissible_floor=0.5,
+              admissible_drop=None, plateau_factor=5.0, disp_factor=5.0)
+    ref = {"total": 0.2003, "disp": 1.12e-6, "admissible": 0.738}
+    rec = {"total": 1.0573, "disp": 3.07e-4, "admissible": 0.475}
+    assert S._has_failed(rec, ref, a) is True
+    assert S._has_failed({**rec, "total": 0.6}, ref, a) is False     # loss short
+    assert S._has_failed({**rec, "admissible": 0.52}, ref, a) is False

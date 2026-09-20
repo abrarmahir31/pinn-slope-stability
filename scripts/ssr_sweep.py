@@ -126,7 +126,17 @@ def parse(argv=None):
                    help="SECONDARY metric, recorded at every SRF and in "
                         "result.json but NOT used to detect failure (D-5.5). "
                         "'none' to omit.")
-    g.add_argument("--admissible-drop", type=float, required=True,
+    g.add_argument("--admissible-mode", choices=("drop", "floor"),
+                   default="drop",
+                   help="drop: failure needs the metric to FALL by more than "
+                        "--admissible-drop below its SRF-start value. floor "
+                        "(D-5.13): failure needs the metric to fall BELOW "
+                        "--admissible-floor in absolute terms. The floor is a "
+                        "CALIBRATED criterion, not a measured one: record the "
+                        "value and what it was calibrated against.")
+    g.add_argument("--admissible-floor", type=float, default=None,
+                   help="absolute threshold for --admissible-mode floor")
+    g.add_argument("--admissible-drop", type=float, default=None,
                    help="failure needs the metric to FALL by more than this "
                         "(fraction, e.g. 0.10) below its SRF-start value")
 
@@ -170,8 +180,20 @@ def parse(argv=None):
             _parse_metric(a.admissible_secondary)
     except ValueError as e:
         ap.error(str(e))
-    if not 0.0 < a.admissible_drop < 1.0:
-        ap.error("--admissible-drop must be in (0, 1)")
+    if a.admissible_mode == "drop":
+        if a.admissible_drop is None:
+            ap.error("--admissible-mode drop needs --admissible-drop")
+        if not 0.0 < a.admissible_drop < 1.0:
+            ap.error("--admissible-drop must be in (0, 1)")
+        if a.admissible_floor is not None:
+            ap.error("--admissible-floor only applies to --admissible-mode floor")
+    else:
+        if a.admissible_floor is None:
+            ap.error("--admissible-mode floor needs --admissible-floor")
+        if not 0.0 < a.admissible_floor < 1.0:
+            ap.error("--admissible-floor must be in (0, 1)")
+        if a.admissible_drop is not None:
+            ap.error("--admissible-drop only applies to --admissible-mode drop")
     if not a.w_yield > 0:
         ap.error("--w-yield must be > 0")
     return a
@@ -276,11 +298,18 @@ def reachable_drop(adm: dict, shares: dict, spec: str) -> dict:
             "reachable_without_dominant": ref - _admissible_metric(kept, shares, spec)}
 
 
+def _admissible_failed(rec, ref, a) -> bool:
+    """The admissible condition, in whichever mode D-5.13 selected."""
+    if getattr(a, "admissible_mode", "drop") == "floor":
+        return bool(rec["admissible"] < a.admissible_floor)
+    return bool((ref["admissible"] - rec["admissible"]) > a.admissible_drop)
+
+
 def _has_failed(rec, ref, a) -> bool:
     """All three, deliberately. Each alone fires on optimiser trouble."""
     return bool(rec["total"] > a.plateau_factor * ref["total"]
                 and rec["disp"] > a.disp_factor * ref["disp"]
-                and (ref["admissible"] - rec["admissible"]) > a.admissible_drop)
+                and _admissible_failed(rec, ref, a))
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +381,7 @@ def _sha256(path, chunk=1 << 20):
 
 _FINGERPRINT = ("criterion", "w_yield", "yield_norm", "cold_start",
                 "admissible_metric", "admissible_secondary", "admissible_drop",
+                "admissible_mode", "admissible_floor",
                 "plateau_factor", "disp_factor", "epochs", "lr", "srf_start",
                 "srf_step", "mc_strength", "mc_sig3max", "sig3_lo", "sig3_hi",
                 "n_pde", "n_bc", "sampling_seed", "smoke")
@@ -510,7 +540,8 @@ def run(a):
         ref = evaluate(a.srf_start)
         reach = reachable_drop(ref["admissible_by_tag"], ref["area_shares"],
                                a.admissible_metric)
-        if a.admissible_drop >= reach["reachable_without_dominant"]:
+        if (a.admissible_mode == "drop"
+                and a.admissible_drop >= reach["reachable_without_dominant"]):
             print(f"WARNING: --admissible-drop {a.admissible_drop} needs "
                   f"{reach['dominant_tag']} to yield: failure confined to the "
                   f"other strata can move '{a.admissible_metric}' by at most "
@@ -539,7 +570,10 @@ def run(a):
                   "admissible_secondary_role": "recorded only, not used "
                                                "to detect failure (D-5.5)",
                   "admissible_secondary_ref": ref.get("admissible_secondary"),
+                  "admissible_mode": a.admissible_mode,
+                  "admissible_floor": a.admissible_floor,
                   "admissible_drop": a.admissible_drop,
+                  "calibrated": a.admissible_mode == "floor",
                   "admissible_ref": ref["admissible"],
                   "admissible_ref_by_tag": ref.get("admissible_by_tag"),
                   "reachable_drop": reach,

@@ -798,6 +798,70 @@ counterpart in the Section 5 domain, so the reason recorded is the end of the
 not by itself show FOS independence; the Fig 10 spread across all three does.
 If the spread is large, 1.0 is not reportable as-is.
 
+### D-5.13 — Failure criterion CALIBRATED to FOS = 1.5 (supervisor, Day 44)
+
+*Decision.* The SSR failure criterion is calibrated, not measured. Settings,
+applied identically to every sweep in Phases 5 and 6:
+
+| parameter | value | flag |
+|---|---|---|
+| loss plateau factor | 5 | `--plateau-factor 5` |
+| admissible criterion | absolute floor | `--admissible-mode floor` |
+| admissible floor | 0.50 | `--admissible-floor 0.50` |
+| displacement factor | 5 | `--disp-factor 5` |
+| metric | min over strata | `--admissible-metric min_tag` |
+
+*Reason given.* The default readout, FOS 3.449 at plateau factor 20, is an
+artefact of the soft constraint's gradual yielding. Calibrating to 1.5 grounds
+the framework in practical geotechnical design standards.
+
+*Evidence this replaces (`runs/probe_v2_disp5`, baseline-v2, GHB, w_yield 1,
+raw).* No threshold-independent FOS exists:
+
+| plateau factor | 5 | 10 | 15 | 20 | 25+ |
+|---|---|---|---|---|---|
+| FOS | 1.500 | 2.000 | 2.750 | 3.453 | > 4.0 |
+
+| admissible floor | 0.60 | 0.50 | 0.40 | 0.30 | 0.20 | 0.15 |
+|---|---|---|---|---|---|---|
+| SRF | 1.250 | 1.500 | 1.750 | 2.250 | 3.000 | 3.469 |
+
+*Analysis notes — binding on how the number is reported.*
+
+1. **This is calibration, not prediction.** The thresholds were selected to
+   produce 1.5. FOS_GHB is therefore not an independent result of the model,
+   and no text may present it as one. What remains predictive is everything
+   RELATIVE under the same fixed criterion: MC vs GHB, the sensitivity
+   ranking (Fig 12), the coupling effect (Fig 11), the w_yield plateau.
+2. **The agreement of the two thresholds at 1.500 is a grid coincidence.**
+   Both crossings are bracketed in (1.25, 1.50) on the 0.25 grid: the plateau
+   condition needs L > 5 x 0.2003 = 1.0015 (L = 0.600 at 1.25, 1.057 at 1.50)
+   and the floor needs adm < 0.50 (0.582 at 1.25, 0.475 at 1.50). Bisected on
+   a finer grid the two will generally NOT coincide; expect a value near
+   1.3-1.45. Report the bisected number with its bracket, not "1.500".
+3. **Uncertainty has three levels**, and only the smallest is the bracket:
+   bisection +/- 0.004; run-to-run optimisation noise ~ +/- 0.05 (neighbouring
+   SRF states are non-monotone in loss, e.g. 3.9638 at SRF 3.438 vs 3.9548 at
+   3.445); criterion choice ~ +/- 1.
+4. **The displacement condition is non-informative on baseline-v2.** The
+   reference field is 1.12e-6, so any yielding gives ratios of 10^2 to 10^3
+   and the condition fires at the first step whatever the factor. It is
+   retained for continuity; the criterion is effectively two-condition.
+5. **Open tension with the case study.** 1.5 is a design-ACCEPTANCE value,
+   while Section 5 is a slope that moved, which is why Ulusay et al.
+   back-analysed it to F = 0.94 (< 1). A criterion calibrated to return 1.5
+   here should expect the question "why does a failed slope score 1.5?".
+   An alternative anchor, not adopted: calibrate the criterion to reproduce
+   F ~ 0.94 under the paper's residual strength, then report what GHB gives
+   under that same criterion. This keeps the calibration tied to this site
+   rather than to a generic standard.
+
+*Implementation.* `ssr_sweep.py` gains `--admissible-mode {drop,floor}` and
+`--admissible-floor`; `result.json` records the mode, the floor and
+`calibrated: true`. Both batch files carry the settings. Tests:
+`test_floor_mode_fires_on_the_absolute_value_not_the_drop`,
+`test_has_failed_still_needs_all_three_under_floor_mode`.
+
 ## Open issues register (Day 42)
 
 Everything unresolved across Steps 5–6, including items raised in chat and
@@ -818,7 +882,8 @@ from a 400-point CPU preview and is withdrawn). 4-step smoke, Mk_d admissible:
 under `ref` the Phase 6 N_PDE arms each run at a different effective penalty.
 Not valid: "1e-3 / 1e-4" (not a mode that exists).
 
-**O-2 ⛔ `--admissible-drop` 0.15, or the drop condition itself.** Blocks any
+**O-2 ✅ CLOSED by D-5.13 (calibrated floor 0.50).** Original entry:
+`--admissible-drop` 0.15, or the drop condition itself. Blocks any
 FOS. Full-length probe `probe_ghb_ref` (baseline-v1, GHB 0–179 kPa, `ref`,
 `w_yield` 1, 1,500 epochs/SRF): min_tag 0.972, 0.950, 0.897, 0.838, 0.846 at
 SRF 1.0–2.0. Loss ratio reached 23.8 (1.75) and 33.2 (2.0); displacement
@@ -830,8 +895,8 @@ would defeat the D-5.1 plateau. Options: keep 0.15; lower it; redefine it (for
 example, a step-to-step drop or a rate); or let loss plus displacement decide.
 Pending: `probe_ghb_raw`.
 
-**O-7 ⛔ `--plateau-factor` 20 and `--disp-factor` 10 are inherited,
-uncalibrated values.** They decide the FOS jointly with O-2. Probe: the
+**O-7 ✅ CLOSED by D-5.13 (plateau 5, disp 5).** Original entry:
+`--plateau-factor` 20 and `--disp-factor` 10 are inherited, uncalibrated values. They decide the FOS jointly with O-2. Probe: the
 displacement condition was only just met at SRF 2.0 (10.3 against 10).
 Record them as decisions or change them, together with O-2.
 
