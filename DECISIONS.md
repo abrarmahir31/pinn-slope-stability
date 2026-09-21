@@ -862,6 +862,65 @@ raw).* No threshold-independent FOS exists:
 `test_floor_mode_fires_on_the_absolute_value_not_the_drop`,
 `test_has_failed_still_needs_all_three_under_floor_mode`.
 
+### D-5.14 — `--yield-norm raw` for every Phase 5 and 6 sweep (21 Sep)
+
+*Decision.* `YIELD_NORM=raw` in `run_phase5.bat` and `run_phase6.bat`. Closes O-1.
+
+*Reason.* Two, and either alone is sufficient.
+1. The `ref` scale depends on N_PDE, so under `ref` each Phase 6 N_PDE arm
+   would run at a different effective penalty, and the arm meant to isolate
+   N_PDE would also vary the penalty. Under `raw` a given `w_yield` means the
+   same penalty at every N_PDE.
+2. The D-5.13 calibration (`probe_v2_disp5`) and FOS_GHB = 1.488
+   (`probe_calibrated`) were both computed under `raw`. D-5.13 requires the
+   criterion to be applied identically to every sweep; `ref` would make every
+   sweep non-comparable with the calibration it depends on.
+
+*Analysis note.* The O-1 smoke evidence (`ref` ~2.2x stronger than `raw` at
+`w_yield` 1; Mk_d `ref` 0.969 -> 0.954, `raw` 0.948 -> 0.929) was measured on
+baseline-v1 and did not decide this. It is not evidence about baseline-v2.
+
+*Analysis note, provenance.* Commit `567fbf1` says "YIELD_NORM=raw", yet on
+21 Sep `run_phase5.bat` held `YIELD_NORM=CHANGE_ME` and `BASELINE` pointed at
+baseline-v1. `probe_calibrated` nonetheless ran on baseline-v2 (hash
+`3345c50c…`), so it was not launched from the batch file as committed. How it
+was launched is not recorded. Verify its mode from its own record:
+`findstr /i "yield" runs\probe_calibrated\result.json`.
+
+### D-5.15 — Fig 9 drawn at the `failed` end of the SRF bracket (21 Sep)
+
+*Decision.* `FIG9_STATE=failed`. Closes O-4. Together with D-5.8 (t = 30 d),
+Fig 9 is the gamma_max field at the first SRF state the criterion declares
+failed, at the end of the rainfall window.
+
+*Reason given.* [FILL]
+
+*Analysis note.* Under D-5.13 "failed" means "the calibrated criterion fired",
+not an independently located failure. The surface Fig 9 shows is therefore the
+field at the calibrated threshold, and its caption must not describe it as the
+predicted failure surface without that qualification (D-5.13 note 1).
+
+### D-5.16 — SRF stepping: step 0.25, bisection to 0.01, ceiling 4.0 (21 Sep)
+
+*Decision.* `--srf-step 0.25 --bisect-tol 0.01 --srf-max 4.0` for every
+Phase 5 and 6 sweep, in `COMMON` (`run_phase5.bat`) and `RUN`
+(`run_phase6.bat`). Closes O-8, conditional on the cold-start check below.
+
+*Reason.* Matches `probe_calibrated`, so the sweeps resolve the crossing the
+same way the calibration did. The 0.05 grid costs ~20 evaluations to reach
+SRF 2.0; stepping at 0.25 and bisecting resolves the crossing in ~8
+(~2.1 h at 965 s per SRF on baseline-v2).
+
+*Analysis note on the ceiling.* The probe used 2.0. 4.0 is chosen because
+`w_yield` 3 is a stronger penalty and may cross higher, and the D-5.13 floor
+table reaches SRF 3.47. A ceiling costs nothing when failure is found early;
+a sweep that reaches it reports FOS > 4.0, not a value.
+
+*Condition.* Larger steps mean larger warm-start jumps, the bias O-8 names.
+`run_phase5.bat cold` measures it and has not been run. If cold and warm
+disagree by more than the ~±0.05 run-to-run noise (D-5.13 note 3), this entry
+reopens.
+
 ## Open issues register (Day 42)
 
 Everything unresolved across Steps 5–6, including items raised in chat and
@@ -874,7 +933,8 @@ Status: ⛔ blocks GPU work or a figure · ◐ affects reporting · ○ housekee
 
 ### Detector and sweep settings
 
-**O-1 ⛔ `--yield-norm`: `raw` or `ref`.** Blocks every sweep.
+**O-1 ✅ CLOSED by D-5.14 (`raw`).** Original entry: `--yield-norm`: `raw`
+or `ref`. Blocks every sweep.
 GPU smoke (baseline-v1, N_PDE 10,000): L_yield on the baseline is 0.450, so
 `ref` is ~2.2× stronger than `raw` at `w_yield` = 1 (the earlier "38×" came
 from a 400-point CPU preview and is withdrawn). 4-step smoke, Mk_d admissible:
@@ -900,7 +960,8 @@ Pending: `probe_ghb_raw`.
 displacement condition was only just met at SRF 2.0 (10.3 against 10).
 Record them as decisions or change them, together with O-2.
 
-**O-8 ◐ SRF step and warm-start bias.** Default `--srf-step 0.05` needs ~20
+**O-8 ✅ CLOSED by D-5.16 (0.25 / 0.01 / 4.0), pending `run_phase5.bat cold`.**
+Original entry: SRF step and warm-start bias. Default `--srf-step 0.05` needs ~20
 evaluations to reach SRF 2.0 (~6 h per sweep); the probe used 0.25 (~10
 evaluations with bisection, ~2.7 h). Larger warm-start jumps are what
 `run_phase5.bat cold` measures. Choose the step for production sweeps.
@@ -921,7 +982,8 @@ reading the v2 numbers, not after.
 
 ### Figures and reporting
 
-**O-4 ⛔ Fig 9 SRF state: `failed` or `stable`.** Distinct from t = 30 d
+**O-4 ✅ CLOSED by D-5.15 (`failed`).** Original entry: Fig 9 SRF state:
+`failed` or `stable`. Distinct from t = 30 d
 (D-5.8). Blocks `run_phase5.bat figs`.
 
 **O-5 ◐ Fig 10 layout.** The workbook defines Fig 10 as FOS bars (LEM /
@@ -983,6 +1045,31 @@ as `unfrozen_baseline`, never `eligible`.
 network's displacement contribution, and the Step 3.4 balancer weights were
 tuned for 1e-3), which checkpoint each future run uses, and whether the
 affected probe directories are discarded or kept as pre-change evidence.
+
+**Addendum (21 Sep) — first `sweeps` launch ran on baseline-v1.**
+`run_phase5.bat` line 20 still set `BASELINE=runs\ansatz\exp_seed7\ckpt_final.pt`,
+and `COMMON` carried no step flags. GHB `w_yield` 0.3 therefore ran on hash
+`0a193d83…` (header: `mode=exp`, `eps_uv=0.001`, L_yield(baseline) 0.450) at
+the default step 0.05 with no ceiling: 33 evaluations, SRF 1.00–2.65, ~9.5 h.
+The 0.50 floor was never reached (lowest min_tag 0.648), so it could not have
+terminated. Caught by reading the header, confirmed by `run_fingerprint.json`:
+`0a193d83…` does not appear in `baselines/baseline-v2/MANIFEST.json`, where
+`ckpt_final.pt` is `3345c50c…`. Kept as
+`runs/ssr_ghb_w0.3_ABORTED_baseline-v1`, validation only, evidence for no
+decision. Fixed in [FILL: commit hash] (both batch files; D-5.14, D-5.16).
+The relaunched sweep was confirmed on `3345c50c…` with `srf_step` 0.25.
+
+Unresolved: this entry records that `exp_seed7/ckpt_final.pt` was overwritten
+with an `eps_uv` 1e-2 network (L_yield 22.636), yet on 21 Sep that path loaded
+as `eps_uv` 1e-3 with L_yield 0.450, the original values. Either it was
+restored or the overwrite was of a different file. Check
+`findstr 0a193d83 baselines\baseline-v1\MANIFEST.json` before relying on
+anything run from that path.
+
+Lesson: `collect_results.py` would have flagged the run only after
+collection. The hash machinery worked because the header was read. Proposed
+guard (not implemented): `ssr_sweep.py` refuses to start unless the baseline
+hash appears in a `baselines/*/MANIFEST.json`, or `--validation` is passed.
 
 **O-21 ◐ The hydraulic problem as posed is essentially static, and the
 domain is unsaturated throughout.** Measured on the 100k run
