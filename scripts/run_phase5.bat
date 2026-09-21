@@ -17,7 +17,7 @@ REM D-5.5 admissible metric: min_tag primary, tag:Mk_d secondary - recorded, not
 REM D-5.6 baseline-v1 is for code validation and smoke sweeps ONLY. Before headline
 REM       numbers: scripts\run_production_baseline.bat, then point BASELINE at it.
 REM       Results on baseline-v1 are marked validation_only by collect_results.py.
-set BASELINE=runs\ansatz\exp_seed7\ckpt_final.pt
+set "BASELINE=runs\ansatz_epsuv1e-2\ckpt_final.pt"
 set SIG3_LO=0
 set SIG3_HI=179000
 set ADM_METRIC=min_tag
@@ -41,8 +41,8 @@ REM ===== STILL OPEN - see DECISIONS.md "Still open after Day 41" =====
 REM YIELD_NORM   raw or ref ONLY. These are the two modes ssr_sweep.py has.
 REM              The smoke stage runs both.
 REM FIG9_STATE   failed or stable - which end of the SRF bracket, not a time
-set YIELD_NORM=CHANGE_ME
-set FIG9_STATE=CHANGE_ME
+set "YIELD_NORM=raw"
+set "FIG9_STATE=failed"
 REM ===========================================================================
 
 set BASE=--baseline %BASELINE% --admissible-metric %ADM_METRIC% --admissible-secondary %ADM_SECONDARY%
@@ -90,7 +90,7 @@ if "%PLATEAU_FACTOR%"=="CHANGE_ME" (echo DECISION MISSING: PLATEAU_FACTOR - D-5.
 if "%RUN_MC%"=="CHANGE_ME" (echo DECISION MISSING: RUN_MC yes or no - D-5.2 option a or c & exit /b 1)
 if "%RUN_MC%"=="yes" if "%MC_SIG3MAX%"=="CHANGE_ME" (echo DECISION MISSING: MC_SIG3MAX in Pa & exit /b 1)
 
-set COMMON=%BASE% --yield-norm %YIELD_NORM% --admissible-mode %ADM_MODE% --admissible-floor %ADM_FLOOR% --plateau-factor %PLATEAU_FACTOR% --disp-factor %DISP_FACTOR%
+set COMMON=%BASE% --yield-norm %YIELD_NORM% --admissible-mode %ADM_MODE% --admissible-floor %ADM_FLOOR% --plateau-factor %PLATEAU_FACTOR% --disp-factor %DISP_FACTOR% --srf-step 0.25 --bisect-tol 0.01 --srf-max 4.0
 set MC=--criterion MC --mc-strength rockmass --mc-sig3max %MC_SIG3MAX%
 
 if "%1"=="sweeps" (

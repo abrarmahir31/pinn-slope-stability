@@ -8,8 +8,8 @@ REM   scripts\run_phase6.bat draws       collocation-draw replicates
 REM   scripts\run_phase6.bat figs        collect results, Figs 11 12
 REM
 REM ===== D-5.3 and D-5.5 are filled in. The rest stay open until Phase 5 is done. =====
-set BASELINE=runs\ansatz\exp_seed7\ckpt_final.pt
-set YIELD_NORM=CHANGE_ME
+set "BASELINE=runs\ansatz_epsuv1e-2\ckpt_final.pt"
+set "YIELD_NORM=raw"
 set ADM_METRIC=min_tag
 REM D-5.13 calibrated criterion - must match run_phase5.bat exactly
 set ADM_MODE=floor
@@ -32,7 +32,7 @@ if "%SIG3_LO%"=="CHANGE_ME" (echo DECISION MISSING: SIG3_LO & exit /b 1)
 if "%SIG3_HI%"=="CHANGE_ME" (echo DECISION MISSING: SIG3_HI & exit /b 1)
 if "%W_REPORT%"=="CHANGE_ME" (echo DECISION MISSING: W_REPORT - the w_yield chosen from the Phase 5 plateau & exit /b 1)
 
-set RUN=python scripts\ssr_sweep.py --criterion GHB --sig3-lo %SIG3_LO% --sig3-hi %SIG3_HI% --baseline %BASELINE% --yield-norm %YIELD_NORM% --admissible-metric %ADM_METRIC% --admissible-mode %ADM_MODE% --admissible-floor %ADM_FLOOR% --plateau-factor %PLATEAU_FACTOR% --disp-factor %DISP_FACTOR% --w-yield %W_REPORT%
+set RUN=python scripts\ssr_sweep.py --criterion GHB --sig3-lo %SIG3_LO% --sig3-hi %SIG3_HI% --baseline %BASELINE% --yield-norm %YIELD_NORM% --admissible-metric %ADM_METRIC% --admissible-mode %ADM_MODE% --admissible-floor %ADM_FLOOR% --plateau-factor %PLATEAU_FACTOR% --disp-factor %DISP_FACTOR% --w-yield %W_REPORT% --srf-step 0.25 --bisect-tol 0.01 --srf-max 4.0
 
 if "%1"=="arms" (
   if "%KS_STRATUM%"=="CHANGE_ME" (echo DECISION MISSING: KS_STRATUM Mk, Mk_d or Tm & exit /b 1)
