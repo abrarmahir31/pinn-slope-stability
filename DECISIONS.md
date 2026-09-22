@@ -847,6 +847,13 @@ raw).* No threshold-independent FOS exists:
    reference field is 1.12e-6, so any yielding gives ratios of 10^2 to 10^3
    and the condition fires at the first step whatever the factor. It is
    retained for continuity; the criterion is effectively two-condition.
+
+   **Amended 22 Sep.** True only when each SRF step is trained long enough.
+   The cold-start sweep at 1,500 epochs/SRF (`ssr_ghb_w1_cold`) met the loss
+   and floor conditions at SRF 1.5 (L 1.160, adm 0.435) but not displacement
+   (|u| 2.06e-6 against 5 x 1.12e-6), and was decided by it: FOS 1.723
+   against 1.488 warm. Under-trained runs can therefore be decided by this
+   condition. See D-5.16 (resolution) and O-22 (whether to drop it).
 5. **Open tension with the case study.** 1.5 is a design-ACCEPTANCE value,
    while Section 5 is a slope that moved, which is why Ulusay et al.
    back-analysed it to F = 0.94 (< 1). A criterion calibrated to return 1.5
@@ -921,6 +928,95 @@ a sweep that reaches it reports FOS > 4.0, not a value.
 disagree by more than the ~±0.05 run-to-run noise (D-5.13 note 3), this entry
 reopens.
 
+*Condition checked (22 Sep): warm-start bias not detected; entry stays
+closed.* `run_phase5.bat cold` (GHB, `w_yield` 1, 1,500 epochs/SRF) gave
+FOS 1.723 ± 0.004 against 1.488 warm, a gap of 0.235. The gap is not
+warm-start bias. It came from the displacement condition: at SRF 1.5 the
+cold run had met the loss and floor conditions, but its displacements were
+~100x smaller than warm (|u| 1.05e-6 vs 1.06e-4 at SRF 1.25; 2.06e-6 vs
+3.07e-4 at 1.5), and its loss was higher at the same SRF (0.636 vs 0.600;
+1.160 vs 1.057), i.e. less converged.
+
+Check (`runs/check_cold_e5000`): one cold-start step at SRF 1.5 with 5,000
+epochs.
+
+| SRF 1.5 | L | adm | \|u\| |
+|---|---|---|---|
+| warm, 1,500 epochs | 1.057 | 0.475 | 3.07e-4 |
+| cold, 1,500 epochs | 1.160 | 0.435 | 2.06e-6 |
+| cold, 5,000 epochs | 1.049 | 0.480 | 3.59e-4 |
+
+With enough training the cold start reaches the warm state (loss within 1%,
+admissible fraction within 0.005, displacement the same order). Conclusion:
+1,500 epochs is enough when warm-started from the previous SRF but not from
+the baseline, so the cold sweep at that budget is not a valid comparison, and
+the warm results stand.
+
+*Analysis note, limits.* Checked at one SRF, one seed, GHB only. A full
+cold-start sweep at 5,000 epochs/SRF would take ~7 h and is not scheduled.
+The cold arm's `result.json` (`docs/results/ssr_ghb_w1_cold_result.json`) is
+kept as the evidence, not as an FOS. Linear interpolation of the cold run
+under the loss and floor conditions alone puts the crossing near 1.42; that is
+an estimate, not a result.
+
+### Phase 5 results (22 Sep) — record, not a decision
+
+All six sweeps on baseline-v2 (hash `3345c50c…`), calibrated criterion
+(D-5.13), `raw` (D-5.14), step 0.25 / bisection 0.01 (D-5.16).
+`collect_results.py` marks all six `eligible`
+(`docs/results/fos_table.md`). Bisection resolution ±0.004.
+
+| w_yield | FOS_GHB | binds | FOS_MC | binds | MC − GHB |
+|---|---|---|---|---|---|
+| 0.3 | 1.496 | loss | 1.520 | loss | +0.024 |
+| 1.0 | **1.488** | loss + floor, same step | **1.527** | loss | +0.039 |
+| 3.0 | 1.520 | floor | 1.582 | floor | +0.062 |
+| spread | 0.032 (2.1%) | | 0.062 (4.1%) | | |
+
+*Analysis notes.*
+
+1. **Plateau (D-5.1, D-5.8).** GHB holds within ±0.05; `w_yield` 1.0 is
+   reportable. MC is marginal: it rises monotonically and `w_yield` 3 sits
+   0.055 above the reported value. Report it as marginal, with the numbers.
+2. **The `w_yield` dependence enters through the floor.** Where the loss
+   ratio binds, both criteria are flat (GHB 0.008, MC 0.007 between
+   `w_yield` 0.3 and 1). Both rises occur at `w_yield` 3, where the floor
+   takes over. Plausible mechanism: a stronger penalty keeps more of the
+   field admissible, delaying the floor, while the loss RATIO partly cancels
+   `w_yield`. Unverified: check the yield term's share of L per SRF in each
+   `sweep.jsonl` before writing the plateau paragraph.
+3. **MC vs GHB is not resolved by FOS.** +0.039 at `w_yield` 1 is below the
+   ±0.05 level. The admissibility columns do distinguish them and point the
+   other way (SRF 1.5, `w_yield` 1: Mk_d 0.409 MC vs 0.475 GHB; Mk 0.928 vs
+   0.954; MC yields into Mk). A higher FOS_MC must not be read as MC being the
+   stronger criterion. D-5.2's fit-range caveat (0–400 vs 0–179 kPa) applies.
+   The three differences share one sign but not independent samples (one
+   baseline, one set of draws).
+4. **The bisection assumes monotonicity it does not have.** GHB `w_yield` 1
+   loss: 0.9983 (1.469), 0.9868 (1.484), 1.0234 (1.492). GHB `w_yield` 3
+   admissible: 0.478 (1.531), 0.512 (1.516), 0.444 (1.523). ±0.004 is the
+   bisection resolution, not the uncertainty; these are direct evidence for
+   the ±0.05 level of D-5.13 note 3.
+5. **Runs are deterministic.** GHB `w_yield` 1 reproduced `probe_v2_disp5`
+   (L 0.2003 at SRF 1; 0.600 / adm 0.582 at 1.25) to 3–4 digits. Run-to-run
+   noise is therefore not measured by repeats; the Phase 6 `draws` arm is
+   what would measure it.
+6. **Fig 9: no through-going failure surface.** At the failed states (GHB
+   SRF 1.492, MC 1.531) gamma_max concentrates in a thin near-surface band,
+   most likely the Mk_d layer (to be confirmed by overlaying strata), and at
+   the crest corner; the extracted ridges are 8 and 11 points, 6.4 and 4.8 m
+   wide. LI/LI(start) 1606x (GHB) and 5726x (MC). Ulusay et al. report the
+   Işıkdere bench failures as small planar slides along marl bedding; a
+   continuum model without bedding planes cannot produce that mechanism
+   (D-5.2 option b, Future Work). The Fig 9 caption must say this.
+7. **Figure revisions identified** (22 Sep, not yet made): add a
+   criterion-dependence figure from `probe_v2_disp5`; Fig 10 must mark the
+   PINN bars as calibrated and separate or drop the LEM bar (O-5, O-15);
+   Fig 8 to plot L/L(SRF 1) with the thresholds drawn and grid vs bisection
+   points distinguished; Fig 9 to use one colour scale for both panels and
+   overlay strata; Fig S1 to drop the LEM line, label the `w_yield` ticks and
+   mark the binding condition; one colour rule for criterion across figures.
+
 ## Open issues register (Day 42)
 
 Everything unresolved across Steps 5–6, including items raised in chat and
@@ -960,11 +1056,19 @@ Pending: `probe_ghb_raw`.
 displacement condition was only just met at SRF 2.0 (10.3 against 10).
 Record them as decisions or change them, together with O-2.
 
-**O-8 ✅ CLOSED by D-5.16 (0.25 / 0.01 / 4.0), pending `run_phase5.bat cold`.**
+**O-8 ✅ CLOSED by D-5.16 (0.25 / 0.01 / 4.0); cold-start check done 22 Sep, bias not detected.**
 Original entry: SRF step and warm-start bias. Default `--srf-step 0.05` needs ~20
 evaluations to reach SRF 2.0 (~6 h per sweep); the probe used 0.25 (~10
 evaluations with bisection, ~2.7 h). Larger warm-start jumps are what
 `run_phase5.bat cold` measures. Choose the step for production sweeps.
+
+**O-22 ◐ Drop the displacement condition?** (22 Sep, supervisor decision.)
+It has never decided an adequately trained run, but it decided the
+under-trained cold run (D-5.13 note 4 amendment, D-5.16). Options: drop it,
+making the criterion formally two-condition (the six Phase 5 results are
+unchanged, since displacement bound none of them); or keep it and state that
+it can decide the FOS when training is short. Changes the calibrated
+criterion, so it needs the supervisor.
 
 ### Production baseline
 
@@ -1056,7 +1160,7 @@ terminated. Caught by reading the header, confirmed by `run_fingerprint.json`:
 `0a193d83…` does not appear in `baselines/baseline-v2/MANIFEST.json`, where
 `ckpt_final.pt` is `3345c50c…`. Kept as
 `runs/ssr_ghb_w0.3_ABORTED_baseline-v1`, validation only, evidence for no
-decision. Fixed in [FILL: commit hash] (both batch files; D-5.14, D-5.16).
+decision. Fixed in `88c6637` (both batch files; D-5.14, D-5.16).
 The relaunched sweep was confirmed on `3345c50c…` with `srf_step` 0.25.
 
 Unresolved: this entry records that `exp_seed7/ckpt_final.pt` was overwritten
@@ -1121,6 +1225,10 @@ still open.** Corrected in place, as dated notes rather than rewrites:
 coal K_s arm), `boundaries.flux_bc` docstring. **Still to fix outside the
 repo:** the 60-day workflow document still lists a coal-seam K_s arm and the
 "~21.5%" coupling figure; correct them before they reach the thesis.
+**Added 22 Sep:** the Project Roadmap's Step 5.3 sets the validation target
+as a compound failure along the coal-seam bedding plane. There is no coal in
+Section 5 (O-9), so that target does not apply; remove it before it reaches
+the thesis.
 
 **O-18 ✅ CLOSED (Day 42).** The shadowed stub was removed; the live
 definition is unchanged, and
