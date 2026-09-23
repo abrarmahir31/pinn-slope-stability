@@ -114,7 +114,9 @@ def parse(argv=None):
                    help="raw: w_yield * L_yield. ref: w_yield * L_yield / "
                         "L_yield(baseline net, SRF start), so w_yield is "
                         "relative to the yield term's own starting size.")
-
+    g.add_argument("--yield-reduction", choices=("legacy", "mean"), default="legacy",
+                   help="legacy: per-stratum SUM of v^2, all Phase 5/6 results (D-5.17). "
+                        "mean: weighted mean as written in D-5.1")
     g = ap.add_argument_group("failure detection")
     g.add_argument("--plateau-factor", type=float, default=20.0)
     g.add_argument("--disp-factor", type=float, default=10.0)
@@ -260,12 +262,12 @@ def _admissible_metric(adm: dict, shares: dict, spec: str) -> float:
 
 
 def _diagnostics(net, coll, mats, yparams, criterion, spec, s=SCALES,
-                 secondary=None):
+                 secondary=None, reduction="legacy"):
     """Admissible fractions from `loss.L_yield` -- the penalty's own stress.
     `admissible` is the primary metric; `admissible_secondary` is recorded
     only (D-5.5)."""
     yld, parts = L_yield(net, coll, mats, yparams, criterion=criterion,
-                         s=s, per_tag=True)
+                         s=s, per_tag=True, reduction=reduction)
     adm = {k[len("admissible_"):]: float(v) for k, v in parts.items()
            if k.startswith("admissible_")}
     shares = _area_shares(coll)
@@ -443,7 +445,7 @@ def run(a):
     with arms.boundary_overrides(mats, overrides):
         # Yield normalisation, measured once on the unmodified baseline net.
         yp0 = _yield_params(a, mats, a.srf_start)
-        y0 = float(L_yield(net, coll, mats, yp0, criterion=a.criterion)[0].detach())
+        y0 = float(L_yield(net, coll, mats, yp0, criterion=a.criterion, reduction=a.yield_reduction)[0].detach())
         if a.yield_norm == "ref":
             if not y0 > 0:
                 raise RuntimeError(
@@ -500,7 +502,7 @@ def run(a):
                 opt.zero_grad(set_to_none=True)
                 L = _losses(net, loss_fn, coll, kc)
                 phys = _frozen_total(L, w_frozen)
-                yld = L_yield(net, coll, mats, yp, criterion=a.criterion)[0]
+                yld = L_yield(net, coll, mats, yp, criterion=a.criterion, reduction=a.yield_reduction)[0]
                 total = phys + a.w_yield * yld / y_scale
                 total.backward()
                 opt.step()
@@ -514,7 +516,7 @@ def run(a):
             if finite:
                 rec.update(_diagnostics(net, coll, mats, yp, a.criterion,
                                         a.admissible_metric,
-                                        secondary=a.admissible_secondary))
+                                        secondary=a.admissible_secondary, reduction=a.yield_reduction))
             torch.save({"net": net.state_dict(), "srf": srf, "cfg": cfg,
                         "sweep": vars(a)},
                        os.path.join(state_dir, f"srf_{key:.6f}.pt"))
@@ -564,6 +566,7 @@ def run(a):
                   "bracket": [stable, failed], "w_yield": a.w_yield,
                   "yield_norm": a.yield_norm, "yield_scale": y_scale,
                   "L_yield_baseline": y0,
+                  "yield_reduction": a.yield_reduction,
                   "admissible_metric": a.admissible_metric,
                   "admissible_metric_role": "primary: used by _has_failed",
                   "admissible_secondary": a.admissible_secondary,

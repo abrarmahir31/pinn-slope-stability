@@ -214,7 +214,7 @@ def L_PDE_mech(net, coll, mats, s: Scales = SCALES, per_tag: bool = False,
 
 
 def L_yield(net, coll, mats, yield_params, criterion: str = "GHB",
-            s: Scales = SCALES, per_tag: bool = False, bishop: bool = True):
+            s: Scales = SCALES, per_tag: bool = False, bishop: bool = True, reduction: str = "legacy"):
     """mean_w[ relu(f/sig_ref)^2 ] over the interior collocation set.
 
     THIS IS THE SOFT-CONSTRAINT ARM, NOT RETURN MAPPING. That choice is
@@ -253,6 +253,8 @@ def L_yield(net, coll, mats, yield_params, criterion: str = "GHB",
             f"L_yield: no yield_params for tag(s) {missing}. "
             f"Have: {sorted(yield_params)}"
         )
+    if reduction not in ("legacy", "mean"):
+        raise ValueError(f"L_yield: reduction must be 'legacy' or 'mean', got {reduction!r}")
 
     w_all = coll.w
     wsum = w_all.sum()
@@ -278,7 +280,13 @@ def L_yield(net, coll, mats, yield_params, criterion: str = "GHB",
         v = pl.yield_violation(sig1.reshape(-1), sig3.reshape(-1),
                                yield_params[tag], criterion,
                                sigma_scale=s.sig_ref)
-        contrib = (w_all[m] * v.pow(2)).sum()
+        if reduction == "legacy":
+            # D-5.17: reproduces every Phase 5/6 result. w_all[m] is (n,1) and
+            # v is (n,), so this broadcasts to (n,n): per stratum it equals
+            # sum_i w_i * sum_j v_j^2, i.e. a SUM of v^2 over the stratum.
+            contrib = (w_all[m] * v.pow(2)).sum()
+        else:
+            contrib = (w_all[m].reshape(-1) * v.pow(2)).sum()
         total = total + contrib
         if per_tag:
             parts[f"pde_yield_{tag}"] = (contrib / w_all[m].sum()).detach()
