@@ -1077,6 +1077,45 @@ close to submission.
 weight would show directly that the FOS agrees; worth doing only if time
 remains after Phase 6.
 
+### D-6.1 — Sensitivity arms on Mk_d; rainfall arm dropped; draws as replicates (PROPOSED 24 Sep, supervisor to ratify)
+
+*Status.* Proposed, and launched on 25 Sep so the GPU is not idle while it
+waits for ratification. If the supervisor chooses differently, only the arms
+concerned rerun (~2.2 h each); every run's `result.json` records its overrides.
+
+*Decision.*
+
+| arm | stratum | levels | why these levels |
+|---|---|---|---|
+| K_s | Mk_d | x0.1, x10 (base 1e-9 m/s) | marl K_s was never measured: every packer interval in the marls took no water (Ulusay et al. 2014 s5.2), so +/-20% of an assumed value is not a data uncertainty |
+| GSI | Mk_d | 35, 55 (base 45) | Table 3b gives 45 for the weak zone; +/-10 is the usual GSI chart uncertainty. m_b, s, a and E_rm re-derived at each level |
+| rainfall | — | dropped | closes O-10: 10/20/40 mm/hr are bit-identical BCs (test-pinned) |
+| coupling | — | KC off, KC all | unchanged from D-3.3.2 |
+| replicates | — | collocation draws, seeds 11-14 | closes O-12 for the thesis; network-seed replicates need a retrained baseline each (~18 h) |
+
+*Reasons for Mk_d.* (1) Rainfall enters the domain only through Mk_d
+(`natural_ground` and `bench` are 100% Mk_d) and the capacity cap binds, so
+the infiltration rate IS K_s(Mk_d): this arm is the only way the rainfall
+loading can vary, which is what the dropped rainfall arm was meant to test and
+what triggered the observed bench failures (INS-2, INS-3 failed about a week
+after heavy rain; Ulusay et al. 2014 s7). (2) Mk_d binds `min_tag` and carries
+the strain in Fig 9, and the paper's critical Section 5 surfaces run through
+it (Fig. 19d). (3) Tm was rejected: its measured head is below the domain
+floor and the paper finds the bedrock aquifer does not affect stability, so a
+Tm arm would be an expected null.
+
+*Consequences.*
+1. The tornado bars have different range bases (a K_s decade vs a GSI band);
+   the caption must say each range comes from data uncertainty, not a uniform
+   +/-20%.
+2. **O-11 is not resolved here.** The GSI arms run against the baseline
+   sigma_0 (`sigma0_consistent: false` in their result.json). Either state
+   it as a limitation or re-solve sigma_0 per arm and rerun those two arms.
+3. With the static hydraulic field (O-21) the K_s arm may give a null result.
+   That is reportable.
+4. Driver: `scripts/run_remaining.py` (one command, resumes on restart);
+   `run_phase6.bat` carries the same settings.
+
 ## Open issues register (Day 42)
 
 Everything unresolved across Steps 5–6, including items raised in chat and
@@ -1196,14 +1235,17 @@ re-equilibrated (`sigma0_consistent: false`). Re-solve sigma_0 per arm
 
 ### Phase 6 scope
 
-**O-9 ⛔ `KS_STRATUM` and `GSI_STRATUM`.** Replace the plan's coal-seam K_s
+**O-9 ◐ PROPOSED by D-6.1 (Mk_d / Mk_d), awaiting supervisor.** Original entry:
+`KS_STRATUM` and `GSI_STRATUM`. Replace the plan's coal-seam K_s
 arm (no coal in Section 5). Blocks `run_phase6.bat arms`.
 
-**O-10 ◐ Rainfall arm.** 10/20/40 mm/hr give bit-identical boundary conditions
+**O-10 ◐ PROPOSED by D-6.1 (drop; the Mk_d K_s arm replaces it).** Original
+entry: Rainfall arm. 10/20/40 mm/hr give bit-identical boundary conditions
 under `INFILTRATION_MODE = "capacity_limited"` (test-pinned). Drop the arm, or
 change the infiltration mode (a model change).
 
-**O-12 ◐ Replicates.** `--sampling-seed` varies collocation draws only; true
+**O-12 ◐ PROPOSED by D-6.1 (draws, seeds 11-14).** Original entry:
+Replicates. `--sampling-seed` varies collocation draws only; true
 network-seed replicates need one production baseline per seed (~18 h each).
 
 **O-20 ⛔ The baseline checkpoint was overwritten in place (Day 42).**

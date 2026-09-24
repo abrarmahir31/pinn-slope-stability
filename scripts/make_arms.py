@@ -13,6 +13,7 @@ import argparse
 import sys
 
 from src import arms
+from src import sensitivity as sens
 
 
 def main(argv=None):
@@ -21,6 +22,12 @@ def main(argv=None):
     ap.add_argument("--ks-stratum", required=True, choices=arms.SECTION5_TAGS)
     ap.add_argument("--gsi-stratum", required=True, choices=arms.SECTION5_TAGS)
     ap.add_argument("--ks-frac", type=float, default=0.20)
+    ap.add_argument("--ks-factors", default=None,
+                    help="LOW,HIGH multipliers for the K_s arm, e.g. 0.1,10. "
+                         "Replaces the symmetric +/- --ks-frac pair. For a "
+                         "stratum whose K_s was never measured (the marls: "
+                         "zero packer intake, Ulusay et al. 2014 s5.2) a "
+                         "+/-20%% range is not a data uncertainty (D-6.1).")
     ap.add_argument("--gsi-levels", default="40,50,60")
     ap.add_argument("--include-rainfall", action="store_true")
     ap.add_argument("--no-coupling", action="store_true")
@@ -31,6 +38,18 @@ def main(argv=None):
         ks_stratum=a.ks_stratum, gsi_stratum=a.gsi_stratum, ks_frac=a.ks_frac,
         gsi_levels=tuple(float(g) for g in a.gsi_levels.split(",")))
     oat = [x for x in oat if not x.is_base]
+    if a.ks_factors:
+        try:
+            lo, hi = (float(v) for v in a.ks_factors.split(","))
+        except ValueError:
+            ap.error("--ks-factors takes exactly two numbers, LOW,HIGH")
+        if not 0 < lo < 1 < hi:
+            ap.error("--ks-factors needs 0 < LOW < 1 < HIGH")
+        ks = f"{a.ks_stratum}_K_s"
+        oat = [x for x in oat if x.factor != ks] + [
+            sens.Arm(ks, lvl, f"{a.ks_stratum} K_s x{f:g}",
+                     {"ks_multiplier": {a.ks_stratum: f}})
+            for lvl, f in (("low", lo), ("high", hi))]
     if not a.include_rainfall:
         oat = [x for x in oat if x.factor != "rainfall"]
     coupling = [] if a.no_coupling else [

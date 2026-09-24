@@ -68,8 +68,23 @@ def headline_status(run: dict, shas: dict) -> str:
 
 
 _SETTINGS = ("criterion", "yield_norm", "admissible_metric", "admissible_drop",
+             "admissible_mode", "admissible_floor", "yield_reduction",
              "plateau_factor", "disp_factor", "epochs", "lr", "sig3_range",
              "mc_design")
+
+# D-5.17: under the `legacy` yield reduction the penalty is a per-stratum SUM,
+# so its strength grows in proportion to N_PDE. Runs are only comparable
+# across N_PDE at a matched EFFECTIVE weight w_yield * N_PDE / N_REF.
+N_REF = 10000
+
+
+def effective_w_yield(r) -> float:
+    """w_yield at the N_REF-equivalent penalty strength (D-5.17 consequence 2).
+    `mean` is a true mean and needs no scaling."""
+    w = float(r["w_yield"])
+    if (r.get("yield_reduction") or "legacy") == "legacy":
+        w *= float(r["n_pde"]) / N_REF
+    return round(w, 9)
 
 
 def load_runs(pattern: str, baselines_root: str = "baselines") -> list[dict]:
@@ -82,6 +97,8 @@ def load_runs(pattern: str, baselines_root: str = "baselines") -> list[dict]:
             continue
         arm = r.get("arm") or {}
         r["dir"] = os.path.dirname(rj)
+        # Runs written before commit 32fc5a6 carry no key but ran `legacy`.
+        r["yield_reduction"] = r.get("yield_reduction") or "legacy"
         r["factor"] = arm.get("factor")
         r["level"] = arm.get("level")
         r["headline"] = headline_status(r, shas)
@@ -112,7 +129,7 @@ def plateau(rows):
         f = [p[1] for p in pts]
         mean = sum(f) / len(f)
         out.append({"criterion": g[0]["criterion"],
-                    "cold_start": g[0]["cold_start"],
+                    "cold_start": g[0]["cold_start"], "n_pde": g[0]["n_pde"],
                     "points": pts, "min": min(f), "max": max(f),
                     "rel_spread": (max(f) - min(f)) / mean,
                     "dirs": [r["dir"] for r in g]})
@@ -188,17 +205,25 @@ def replicates(rows):
 
 
 def n_pde(rows):
+    """Grouped at a matched EFFECTIVE penalty (D-5.17), not a matched w_yield:
+    an unscaled legacy run at 5k or 20k varies the penalty strength and the
+    discretisation together, and must not enter a convergence check."""
     groups = defaultdict(dict)
     for r in _with_fos(rows):
         if r["factor"] is None and not r["cold_start"] and r["kc"] == "default":
-            groups[_key(r, "w_yield", "baseline", "sampling_seed")][r["n_pde"]] = r
+            k = _key(r, "baseline", "sampling_seed") + (
+                json.dumps(effective_w_yield(r)),)
+            groups[k][r["n_pde"]] = r
     out = []
     for g in groups.values():
         if len(g) >= 2:
             ns = sorted(g)
             conv, rel = sens.convergence_check(ns, [g[n]["fos"] for n in ns])
             out.append({"criterion": g[ns[0]]["criterion"], "n_pde": ns,
+                        "w_yield": [g[n]["w_yield"] for n in ns],
+                        "w_eff": effective_w_yield(g[ns[0]]),
                         "fos": [g[n]["fos"] for n in ns],
+                        "dirs": [g[n]["dir"] for n in ns],
                         "rel_changes": rel, "last_change_within_1pct": conv})
     return out
 

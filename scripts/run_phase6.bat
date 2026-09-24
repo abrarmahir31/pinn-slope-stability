@@ -3,7 +3,9 @@ setlocal
 REM Phase 6 on the lab PC. Run only after Phase 5 has a reportable FOS.
 REM   scripts\run_phase6.bat arms        write configs\arms\*.json
 REM   scripts\run_phase6.bat sweeps      one sweep per arm file
-REM   scripts\run_phase6.bat npde        N_PDE levels 5000 and 20000
+REM   scripts\run_phase6.bat npde        N_PDE 5000 and 20000 at D-5.17 scaled w_yield
+REM
+REM The whole remaining queue, unattended, is scripts\run_remaining.bat.
 REM   scripts\run_phase6.bat draws       collocation-draw replicates
 REM   scripts\run_phase6.bat figs        collect results, Figs 11 12
 REM
@@ -20,8 +22,12 @@ set SIG3_LO=0
 set SIG3_HI=179000
 REM D-5.8: w_yield 1.0, conditional on the Phase 5 plateau holding
 set W_REPORT=1
-set KS_STRATUM=CHANGE_ME
-set GSI_STRATUM=CHANGE_ME
+REM D-6.1 (proposed 24 Sep, supervisor to ratify): both arms on Mk_d.
+REM K_s x0.1 / x10 (marl K_s was never measured); GSI 35 / 55 (Table 3b 45 +/- 10).
+set KS_STRATUM=Mk_d
+set GSI_STRATUM=Mk_d
+set KS_FACTORS=0.1,10
+set GSI_LEVELS=35,45,55
 REM ===========================================================================
 
 if "%BASELINE%"=="CHANGE_ME" (echo DECISION MISSING: BASELINE & exit /b 1)
@@ -37,7 +43,7 @@ set RUN=python scripts\ssr_sweep.py --criterion GHB --sig3-lo %SIG3_LO% --sig3-h
 if "%1"=="arms" (
   if "%KS_STRATUM%"=="CHANGE_ME" (echo DECISION MISSING: KS_STRATUM Mk, Mk_d or Tm & exit /b 1)
   if "%GSI_STRATUM%"=="CHANGE_ME" (echo DECISION MISSING: GSI_STRATUM Mk or Mk_d & exit /b 1)
-  python scripts\make_arms.py --ks-stratum %KS_STRATUM% --gsi-stratum %GSI_STRATUM% --out configs\arms
+  python scripts\make_arms.py --ks-stratum %KS_STRATUM% --gsi-stratum %GSI_STRATUM% --ks-factors %KS_FACTORS% --gsi-levels %GSI_LEVELS% --out configs\arms
   if errorlevel 1 exit /b 1
   exit /b 0
 )
@@ -51,10 +57,12 @@ if "%1"=="sweeps" (
 )
 
 if "%1"=="npde" (
-  for %%N in (5000 20000) do (
-    %RUN% --n-pde %%N --out runs\ssr_ghb_n%%N
-    if errorlevel 1 exit /b 1
-  )
+  REM D-5.17: legacy L_yield is a per-stratum sum, so w_yield scales as 10000/N_PDE.
+  REM RUN already carries --w-yield %W_REPORT%; argparse keeps the LAST value.
+  %RUN% --n-pde 5000 --w-yield 2 --out runs\ssr_ghb_n5000_wscaled
+  if errorlevel 1 exit /b 1
+  %RUN% --n-pde 20000 --w-yield 0.5 --out runs\ssr_ghb_n20000_wscaled
+  if errorlevel 1 exit /b 1
   exit /b 0
 )
 

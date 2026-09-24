@@ -74,12 +74,54 @@ def test_coupling_effect_is_signed(tmp_path):
 
 
 def test_replicates_and_n_pde(tmp_path):
+    # D-5.17: a legacy 5k run matches the 10k w_yield 1 run at w_yield 2.
     _run(tmp_path, "ssr_s1", sampling_seed=1, fos=1.20)
     _run(tmp_path, "ssr_s2", sampling_seed=2, fos=1.24)
-    _run(tmp_path, "ssr_n5k", sampling_seed=1, n_pde=5000, fos=1.18)
+    _run(tmp_path, "ssr_n5k", sampling_seed=1, n_pde=5000, w_yield=2.0,
+         fos=1.18)
     rows = C.load_runs(str(tmp_path / "ssr*"))
     assert C.replicates(rows)[0]["n"] == 2
-    assert C.n_pde(rows)[0]["n_pde"] == [5000, 10000]
+    g = C.n_pde(rows)[0]
+    assert g["n_pde"] == [5000, 10000] and g["w_eff"] == 1.0
+
+
+def test_n_pde_never_groups_unscaled_legacy_runs(tmp_path):
+    # Same w_yield at 5k/10k/20k is three DIFFERENT penalty strengths (D-5.17).
+    _run(tmp_path, "ssr_n10k", sampling_seed=1, fos=1.49)
+    _run(tmp_path, "ssr_n5k", sampling_seed=1, n_pde=5000, fos=1.49)
+    _run(tmp_path, "ssr_n20k", sampling_seed=1, n_pde=20000, fos=1.62)
+    assert C.n_pde(C.load_runs(str(tmp_path / "ssr*"))) == []
+
+
+def test_n_pde_mean_reduction_needs_no_scaling(tmp_path):
+    _run(tmp_path, "ssr_n10k", sampling_seed=1, yield_reduction="mean")
+    _run(tmp_path, "ssr_n5k", sampling_seed=1, n_pde=5000,
+         yield_reduction="mean")
+    assert C.n_pde(C.load_runs(str(tmp_path / "ssr*")))[0]["w_eff"] == 1.0
+
+
+def test_missing_yield_reduction_is_legacy_and_never_mixes_with_mean(tmp_path):
+    _run(tmp_path, "ssr_a", w_yield=0.3)
+    _run(tmp_path, "ssr_b", w_yield=3.0, yield_reduction="mean")
+    rows = C.load_runs(str(tmp_path / "ssr*"))
+    assert {r["yield_reduction"] for r in rows} == {"legacy", "mean"}
+    assert C.plateau(rows) == []
+
+
+def test_make_arms_ks_factors_replace_the_symmetric_pair(tmp_path):
+    make_arms.main(["--ks-stratum", "Mk_d", "--gsi-stratum", "Mk_d",
+                    "--gsi-levels", "35,45,55", "--ks-factors", "0.1,10",
+                    "--out", str(tmp_path)])
+    lo = json.load(open(tmp_path / "Mk_d_K_s_low.json"))
+    hi = json.load(open(tmp_path / "Mk_d_K_s_high.json"))
+    assert lo["overrides"] == {"ks_multiplier": {"Mk_d": 0.1}}
+    assert hi["overrides"] == {"ks_multiplier": {"Mk_d": 10.0}}
+    gsi = json.load(open(tmp_path / "Mk_d_GSI_low.json"))
+    assert gsi["overrides"]["materials"]["Mk_d"]["gsi"] == 35.0
+    assert len(os.listdir(tmp_path)) == 6       # 2 K_s, 2 GSI, 2 coupling
+    with pytest.raises(SystemExit):
+        make_arms.main(["--ks-stratum", "Mk_d", "--gsi-stratum", "Mk_d",
+                        "--ks-factors", "1.2,0.8", "--out", str(tmp_path)])
 
 
 def test_main_refuses_when_there_is_nothing(tmp_path):
