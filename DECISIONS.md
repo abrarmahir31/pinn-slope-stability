@@ -894,6 +894,14 @@ baseline-v1. `probe_calibrated` nonetheless ran on baseline-v2 (hash
 was launched is not recorded. Verify its mode from its own record:
 `findstr /i "yield" runs\probe_calibrated\result.json`.
 
+*Amended 23 Sep (D-5.17).* Reason 1 is withdrawn. Because the implemented
+yield penalty is a per-stratum sum, under `raw` the penalty grows in
+proportion to N_PDE (L_yield(baseline) 0.159 / 0.315 / 0.628 at 5k / 10k /
+20k); `ref`, which divides by that baseline value, would have cancelled it.
+Reason 2 (consistency with the D-5.13 calibration and all Phase 5 results)
+stands, so `raw` is retained, and the N_PDE arm is corrected by scaling
+w_yield instead (D-5.17 consequence 2).
+
 ### D-5.15 — Fig 9 drawn at the `failed` end of the SRF bracket (21 Sep)
 
 *Decision.* `FIG9_STATE=failed`. Closes O-4. Together with D-5.8 (t = 30 d),
@@ -1017,6 +1025,58 @@ All six sweeps on baseline-v2 (hash `3345c50c…`), calibrated criterion
    overlay strata; Fig S1 to drop the LEM line, label the `w_yield` ticks and
    mark the binding condition; one colour rule for criterion across figures.
 
+### D-5.17 — The implemented yield penalty is a per-stratum SUM; kept as `legacy` (23 Sep, supervisor)
+
+*Finding.* In `loss.L_yield`, `coll.w` has shape (n, 1) while the violation
+`v` is flat (n,), so `w_all[m] * v.pow(2)` broadcasts to an n x n matrix.
+Per stratum the contribution is sum_i w_i x sum_j v_j^2, and after dividing
+by the total weight the function returns
+
+    L_yield = sum over strata of (W_tag / W) x sum_{j in tag} v_j^2
+
+a SUM of v^2 within each stratum, not the weighted mean D-5.1 describes.
+
+*Evidence.* Shape check: `w (1000, 1)`. `scripts/diag_loss_scaling.py`, same
+network and seeds at N_PDE 5k/10k/20k, ratio 20k/5k: `yield` (legacy) 4.17x;
+`yield_mean` (corrected) 1.04x; every physics term a mean (`pde_richards`
+0.91x, `pde_mech` 1.17x, `bc`, `bc_mech`, `interface`, `ic_head`, `ic_disp`
+exactly 1.00x). The sweep headers show the same: L_yield(baseline, SRF 1)
+0.159 / 0.315 / 0.628 at 5k / 10k / 20k. `L_PDE_mech` uses the same
+`w_all[m] * (...)` pattern but its residuals are (n, 1), so nothing
+broadcasts; the test confirms it.
+
+*Decision.* Keep the implemented behaviour for all Phase 5 and 6 results.
+`ssr_sweep.py --yield-reduction legacy|mean`, default `legacy`, reproduces
+every earlier result exactly (diagnostic values unchanged); `result.json`
+records the setting. `mean` is the corrected weighted mean. Commit `32fc5a6`;
+575 passed, 4 skipped.
+
+*Reason.* The bug rescales the penalty (by roughly the stratum point count,
+~2,500-4,000x at 10k; legacy/mean = 4,000 on the test network) and reweights
+strata by point count (at most ~1.6x between strata). The yield criterion,
+the stresses, the admissible fractions (computed from `v` directly) and the
+failure tests are unaffected. w_yield was always an arbitrary penalty weight;
+what the thesis can claim is the plateau over a tenfold range of the penalty
+actually used, which stands. Correcting it would require a new plateau
+search, probably a new D-5.13 calibration and Phase 5 reruns, about 3-4 days
+close to submission.
+
+*Consequences.*
+1. Methods state the implemented penalty, not the D-5.1 formula; D-5.1's
+   formula is the intent. Limitations note the per-stratum weighting.
+2. **N_PDE arm: w_yield scales as 10,000 / N_PDE** (2.0 at 5k, 0.5 at 20k)
+   so the effective penalty matches the 10k runs:
+   `runs/ssr_ghb_n5000_wscaled`, `runs/ssr_ghb_n20000_wscaled`
+   (results: [pending]). The unscaled runs (`ssr_ghb_n5000` 1.488,
+   `ssr_ghb_n20000` 1.621) vary penalty strength and discretisation together
+   and are kept as evidence only.
+3. D-5.14 reason 1 is withdrawn (see the amendment there).
+4. Every other caller of `L_yield` uses the default and is unchanged.
+
+*Not scheduled.* One `--yield-reduction mean` sweep at a matched effective
+weight would show directly that the FOS agrees; worth doing only if time
+remains after Phase 6.
+
 ## Open issues register (Day 42)
 
 Everything unresolved across Steps 5–6, including items raised in chat and
@@ -1069,6 +1129,20 @@ making the criterion formally two-condition (the six Phase 5 results are
 unchanged, since displacement bound none of them); or keep it and state that
 it can decide the FOS when training is short. Changes the calibrated
 criterion, so it needs the supervisor.
+
+**Addendum (23 Sep) — the N_PDE arm makes this decisive.** In the unscaled
+N_PDE runs the displacement test decided both new levels, on |u| noise at
+the µm scale (it moves 30x between neighbouring SRFs): 5k 1.488 (stable at
+1.484 with |u| 1.4e-7, failed at 1.492 with 5.8e-6, loss and floor fired at
+both); 20k 1.621 (loss and floor had fired by 1.562). Recomputed from
+`sweep.jsonl` with loss + floor only: 5k ≈ 1.453 (1.438-1.469), 10k 1.488,
+20k ≈ 1.531 (1.500-1.562). These runs are also confounded by D-5.17; the
+w_yield-scaled reruns are the ones to report.
+
+**O-23 ✅ CLOSED by D-5.17 (`legacy` kept, 23 Sep).** Original entry:
+L_yield(baseline) doubles with N_PDE on the same network. Cause: (n,1) x (n,)
+broadcasting in `L_yield`, making the penalty a per-stratum sum. Physics terms
+checked and unaffected.
 
 ### Production baseline
 
