@@ -1,5 +1,5 @@
 {
- "ckpt": "runs\\ansatz_epsuv1e-2\\ckpt_final.pt",
+ "ckpt": "baselines\\baseline-v2\\run\\ckpt_final.pt",
  "step": 100000,
  "t_days": 30.0,
  "n": 6000,
