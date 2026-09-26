@@ -32,7 +32,7 @@ python scripts\verify_nguyen_raudkivi.py --out %OUT%\fig7.png --json %OUT%\fig7.
 python scripts\make_results_figs.py --results docs\results --out %OUT% --require  || goto :fail
 
 if exist runs\ssr_mc_w1\states (
-  python scripts\make_fig9.py --run runs\ssr_ghb_w1 --run runs\ssr_mc_w1 --state failed --out %OUT%\fig9.png || goto :fail
+   python scripts\make_fig9.py --run runs\ssr_ghb_w1 --run runs\ssr_mc_w1 --state failed --out %OUT%\fig9.png || goto :fail
 ) else (
   echo SKIPPED Fig 9: runs\ssr_ghb_w1\states and runs\ssr_mc_w1\states not on this machine
 )
