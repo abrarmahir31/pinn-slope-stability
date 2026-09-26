@@ -23,6 +23,9 @@ early (D-W.4) and its later values are a held weight, not training progress.
     PYTHONPATH=. python scripts/make_fig4.py runs/polish_exp_seed7/log.jsonl
     PYTHONPATH=. python scripts/make_fig4.py LOG --out docs/fig4.png
     PYTHONPATH=. python scripts/make_fig4.py LOG1 LOG2 --labels adam polish
+
+Style: `src/plot_style.py` (Times New Roman 12 pt, 6.25 in wide, PNG + PDF).
+The legend sits in a strip above the axes so no trajectory is covered.
 """
 import argparse
 import json
@@ -31,20 +34,28 @@ import os
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter, LogLocator, NullFormatter
+
+from src import plot_style as ps
 
 #: Drawn in this order; bc_mech first because it is the anchor (D-W.2).
 TERMS = ("bc_mech", "pde_mech", "pde_richards", "bc", "ic_head", "ic_disp")
 FROZEN_TERMS = ("interface",)
 
-COLOURS = {
-    "bc_mech": "#000000",
-    "pde_mech": "#d62728",
-    "pde_richards": "#1f77b4",
-    "bc": "#2ca02c",
-    "ic_head": "#ff7f0e",
-    "ic_disp": "#9467bd",
-    "interface": "#999999",
-}
+COLOURS = ps.LOSS
+STYLES = ps.LOSS_STYLE
+MARKERS = {"bc_mech": "s", "pde_mech": "o", "pde_richards": "D", "bc": "^",
+           "ic_head": "v", "ic_disp": "P", "interface": None}
+
+#: Legend text. The code names are kept (they match the loss module and
+#: Fig 2) but typeset as symbols, as in the Methodology.
+LABELS = {"bc_mech": r"$\mathcal{L}_{\mathrm{BC,mech}}$",
+          "pde_mech": r"$\mathcal{L}_{\mathrm{PDE,mech}}$",
+          "pde_richards": r"$\mathcal{L}_{\mathrm{PDE,Richards}}$",
+          "bc": r"$\mathcal{L}_{\mathrm{BC,hyd}}$",
+          "ic_head": r"$\mathcal{L}_{\mathrm{IC},\psi}$",
+          "ic_disp": r"$\mathcal{L}_{\mathrm{IC},u}$",
+          "interface": r"$\mathcal{L}_{\mathrm{interface}}$"}
 
 
 def load(path):
@@ -74,6 +85,19 @@ def series(rows, term):
     return xs, ys
 
 
+def _sci(v: float) -> str:
+    m, e = f"{v:.0e}".split("e")
+    return rf"${m}\times10^{{{int(e)}}}$"
+
+
+def _roughness(ys) -> float:
+    """Median |step-to-step change| in decades, over the second half of the
+    run. Above ~0.5 a curve is noise-dominated at the plotted resolution."""
+    import numpy as np
+    y = np.log10(np.asarray(ys[len(ys) // 2:], float))
+    return float(np.median(np.abs(np.diff(y)))) if y.size > 2 else 0.0
+
+
 def handover_step(rows):
     """Where Adam ends. Prefers the explicit `phase` key; falls back to the
     largest step gap, which is what a handover looks like when the phase key
@@ -93,56 +117,87 @@ def main(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("logs", nargs="+", help="one or more log.jsonl")
     ap.add_argument("--labels", nargs="*", default=None)
-    ap.add_argument("--out", default="docs/fig4.png")
+    ap.add_argument("--out", default="docs/figs/fig4.png",
+                    help="PNG path; a PDF is written next to it")
     ap.add_argument("--title", default=None)
     ap.add_argument("--no-interface", action="store_true")
-    ap.add_argument("--dpi", type=int, default=200)
+    ap.add_argument("--ymin", type=float, default=1e-16,
+                    help="lower y limit; the frozen interface term (~1e-26) "
+                         "is annotated rather than allowed to compress the "
+                         "axis by ten decades")
+    ap.add_argument("--code-labels", action="store_true",
+                    help="legend with code names (bc_mech, ...) not symbols")
     a = ap.parse_args(argv)
+    ps.apply()
 
     rows = []
     for p in a.logs:
         rows.extend(load(p))
     rows.sort(key=lambda r: r["step"])
 
-    fig, ax = plt.subplots(figsize=(7.2, 4.6))
+    fig, ax = plt.subplots(figsize=(ps.WIDTH, 4.4), layout="constrained")
+    lab = (lambda t: t) if a.code_labels else (lambda t: LABELS.get(t, t))
 
     drawn = []
+    xmax = rows[-1]["step"]
     for term in TERMS:
         xs, ys = series(rows, term)
         if not xs:
             continue
-        ax.semilogy(xs, ys, label=term, color=COLOURS[term], lw=1.6)
+        # The noisiest trajectories go underneath and thinner, so they do not
+        # hide the smooth ones; the data are drawn unsmoothed.
+        noisy = _roughness(ys) > 0.5
+        ax.semilogy(xs, ys, label=lab(term), color=COLOURS[term],
+                    ls=STYLES[term], lw=0.9 if noisy else 1.5,
+                    zorder=2 if noisy else 3, marker=MARKERS[term], ms=4.5,
+                    markevery=max(1, len(xs) // 9), mec="white", mew=0.6)
         drawn.append(term)
+    below = []
     if not a.no_interface:
         for term in FROZEN_TERMS:
             xs, ys = series(rows, term)
             if xs:
-                ax.semilogy(xs, ys, label=f"{term} (frozen)",
-                            color=COLOURS[term], lw=1.1, ls="--", alpha=0.7)
+                ax.semilogy(xs, ys, label=lab(term) + " (frozen)",
+                            color=COLOURS[term], lw=1.2, ls=STYLES[term],
+                            zorder=1)
                 drawn.append(term)
+                if min(ys) < a.ymin:
+                    below.append((term, min(ys)))
 
     if not drawn:
         raise SystemExit("nothing drawable: no term had a positive L and L0")
 
-    ax.axhline(1.0, color="#666666", lw=0.8, ls=":", zorder=0)
+    ax.axhline(1.0, color="#9CA3AF", lw=0.8, ls="-", zorder=1)
 
     step, how = handover_step(rows)
     if step is not None:
-        ax.axvline(step, color="#333333", lw=1.0, ls="-.")
-        ax.annotate("Adam → L-BFGS", xy=(step, ax.get_ylim()[1]),
-                    xytext=(4, -12), textcoords="offset points",
-                    fontsize=8, rotation=90, va="top")
+        ax.axvline(step, color=ps.INK, lw=1.0, ls="-.")
+        ax.annotate("Adam → L-BFGS", xy=(step, 1.0), xytext=(4, 4),
+                    textcoords="offset points", rotation=90, va="bottom")
 
-    ax.set_xlabel("epoch")
-    ax.set_ylabel(r"$L_i / L_i(0)$  (unweighted)")
-    ax.set_title(a.title or "Per-term training loss, relative to initialisation")
-    ax.grid(True, which="both", alpha=0.25, lw=0.5)
-    ax.legend(fontsize=8, ncol=2, framealpha=0.9)
-    fig.tight_layout()
-
-    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
-    fig.savefig(a.out, dpi=a.dpi)
-    print(f"wrote {a.out}")
+    ax.set_xlim(0, xmax)
+    ax.set_ylim(bottom=a.ymin)
+    for term, lo in below:
+        # Stated on the figure, not silently cut: the frozen term leaves the
+        # axis, and its floor is printed so the reader knows where it went.
+        ax.text(0.985, 0.03, f"{LABELS.get(term, term) if not a.code_labels else term}"
+                f" continues below the axis (min {_sci(lo)})", ha="right",
+                va="bottom", transform=ax.transAxes, color=ps.GREY)
+    ax.xaxis.set_major_formatter(FuncFormatter(
+        lambda v, _: f"{v/1000:g}k" if v else "0"))
+    ax.yaxis.set_major_locator(LogLocator(base=10, numticks=12))
+    ax.yaxis.set_minor_locator(LogLocator(base=10, subs=range(2, 10),
+                                          numticks=12))
+    ax.yaxis.set_minor_formatter(NullFormatter())
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel(r"$\mathcal{L}_i\,/\,\mathcal{L}_i(0)$ (unweighted)")
+    if a.title:
+        ax.set_title(a.title)
+    ax.grid(True, which="major")
+    fig.legend(*ax.get_legend_handles_labels(), loc="outside upper center",
+               ncol=4, handlelength=2.2, columnspacing=0.9, frameon=False)
+    for p in ps.save(fig, a.out):
+        print(f"wrote {p}")
     print(f"records {len(rows)}, steps {rows[0]['step']}-{rows[-1]['step']}, "
           f"terms drawn: {', '.join(drawn)}")
     print(f"handover marker: {how}"

@@ -32,3 +32,7 @@ runs/
 *.log
 baselines/*/run/ckpt_0*.pt
 baselines/*/run/ckpt_adam_final.pt
+
+# Thesis figures: keep the vector PDF next to every PNG (plot_style.save)
+!docs/figs/*.pdf
+!docs/figs/_superseded/*.pdf

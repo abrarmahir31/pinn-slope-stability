@@ -51,7 +51,11 @@ must not be quoted as a site parameter without resolving the tension.
 
     PYTHONPATH=. python scripts/verify_nguyen_raudkivi.py
     PYTHONPATH=. python scripts/verify_nguyen_raudkivi.py --epochs 6000 --w 3e5
-    PYTHONPATH=. python scripts/verify_nguyen_raudkivi.py --out docs/fig7.png
+    PYTHONPATH=. python scripts/verify_nguyen_raudkivi.py --out docs/figs/fig7.png
+
+FIGURE: (a) drawdown profiles, full width; (b) 1:1 at the nine points and
+(c) the error map side by side beneath. 6.25 in wide, 12 pt Times
+(`src/plot_style.py`), PNG (300 dpi) + PDF.
 """
 import argparse
 import json
@@ -64,6 +68,8 @@ import torch.nn as nn
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+from src import plot_style as ps
 
 
 def analytic(x, t, w, s_w):
@@ -127,7 +133,8 @@ def main(argv=None):
     ap.add_argument("--depth", type=int, default=4)
     ap.add_argument("--lr", type=float, default=3e-3)
     ap.add_argument("--seed", type=int, default=7)
-    ap.add_argument("--out", default="docs/fig7.png")
+    ap.add_argument("--out", default="docs/figs/fig7.png",
+                    help="PNG path; a PDF is written next to it")
     ap.add_argument("--json", default="docs/verify_nguyen_raudkivi.json")
     ap.add_argument("--dpi", type=int, default=200)
     a = ap.parse_args(argv)
@@ -259,60 +266,74 @@ def main(argv=None):
               f"{p['s_analytic']:>11.4f}{p['s_pinn']-p['s_analytic']:>11.2e}")
 
     # -- figure -------------------------------------------------------------
-    fig = plt.figure(figsize=(11.5, 4.3))
-    gs = fig.add_gridspec(1, 3, width_ratios=[1.15, 1.0, 1.0], wspace=0.30)
+    ps.apply()
+    fig = plt.figure(figsize=(ps.WIDTH, 6.6), layout="constrained")
+    gs = fig.add_gridspec(2, 2, height_ratios=[1.0, 1.05])
 
-    ax0 = fig.add_subplot(gs[0, 0])
-    for td, c in zip(TIMES, ("#1f77b4", "#ff7f0e", "#2ca02c")):
+    ax0 = fig.add_subplot(gs[0, :])
+    cols = (ps.COBALT, ps.VERMILION, ps.EMERALD)
+    for td, c in zip(TIMES, cols):
         sa = analytic(xg, np.full_like(xg, td), a.w, a.s_w)
         with torch.no_grad():
             sp = net(torch.tensor(xg / a.L).reshape(-1, 1),
                      torch.full((len(xg), 1), td / a.t_max)).numpy().ravel() * a.s_w
-        ax0.plot(xg, a.h0 - sa, color=c, lw=1.8, label=f"exact, t={td:g} d")
-        ax0.plot(xg, a.h0 - sp, color=c, lw=0, marker="o", ms=2.6,
-                 markevery=7, label=f"PINN, t={td:g} d")
-    ax0.set_xlabel("distance from excavation face (m)")
-    ax0.set_ylabel("piezometric level (m)")
-    ax0.set_title("Drawdown profiles")
-    ax0.grid(alpha=0.25, lw=0.5)
-    ax0.legend(fontsize=7, ncol=2)
+        ax0.plot(xg, a.h0 - sa, color=c, lw=1.6, label=f"exact, $t$ = {td:g} d")
+        ax0.plot(xg, a.h0 - sp, color=c, lw=0, marker="o", ms=4.2,
+                 mfc="white", mew=1.1, markevery=7,
+                 label=f"PINN, $t$ = {td:g} d")
+    ax0.set_xlabel("Distance from excavation face (m)")
+    ax0.set_ylabel("Piezometric level (m)")
+    ax0.legend(ncol=3, loc="lower left", bbox_to_anchor=(0.0, 1.01, 1.0, 0.2),
+               mode="expand", borderaxespad=0.0, frameon=False,
+               columnspacing=0.8, handlelength=1.5)
+    ps.panel_label(ax0, "a")
 
-    ax1 = fig.add_subplot(gs[0, 1])
+    ax1 = fig.add_subplot(gs[1, 0])
     xs = [p["h_analytic"] for p in pairs]
     ys = [p["h_pinn"] for p in pairs]
     mk = {1.0: "o", 7.0: "s", 30.0: "^"}
-    for p in pairs:
-        ax1.scatter(p["h_analytic"], p["h_pinn"], s=42,
-                    marker=mk[p["t_d"]], facecolor="none",
-                    edgecolor="#1f77b4", lw=1.3)
+    mc = dict(zip((1.0, 7.0, 30.0), cols))
     lo = min(min(xs), min(ys))
     hi = max(max(xs), max(ys))
     pad = 0.05 * (hi - lo or 1.0)
-    ax1.plot([lo - pad, hi + pad], [lo - pad, hi + pad], "k-", lw=1.0)
+    ax1.plot([lo - pad, hi + pad], [lo - pad, hi + pad], "-", color=ps.INK,
+             lw=0.9, zorder=1)
+    for p in pairs:
+        ax1.scatter(p["h_analytic"], p["h_pinn"], s=46, marker=mk[p["t_d"]],
+                    facecolor="none", edgecolor=mc[p["t_d"]], lw=1.4, zorder=3)
     ax1.set_xlim(lo - pad, hi + pad)
     ax1.set_ylim(lo - pad, hi + pad)
     ax1.set_aspect("equal")
-    ax1.set_xlabel("analytical head (m)")
+    ax1.set_xlabel("Analytical head (m)")
     ax1.set_ylabel("PINN head (m)")
-    ax1.set_title(f"1:1,  $R^2$ = {r2:.5f}")
-    ax1.grid(alpha=0.25, lw=0.5)
     for t_d, m in mk.items():
-        ax1.scatter([], [], marker=m, facecolor="none", edgecolor="#1f77b4",
-                    label=f"t = {t_d:g} d")
-    ax1.legend(fontsize=7, loc="upper left")
+        ax1.scatter([], [], marker=m, facecolor="none", edgecolor=mc[t_d],
+                    lw=1.4, label=f"{t_d:g} d")
+    ax1.legend(loc="lower right", handletextpad=0.2, borderpad=0.3)
+    ax1.text(0.04, 0.80, f"$R^2$ = {r2:.5f}", transform=ax1.transAxes)
+    ps.panel_label(ax1, "b")
 
-    ax2 = fig.add_subplot(gs[0, 2])
-    im = ax2.pcolormesh(xg, tg, err, cmap="RdBu_r",
-                        vmin=-maxe, vmax=maxe, shading="auto")
-    ax2.set_xlabel("distance (m)")
-    ax2.set_ylabel("time (d)")
-    ax2.set_title(f"error,  RMSE = {rmse:.2e} m")
-    ax2.axvline(0.02 * a.L, color="k", lw=0.7, ls=":")
-    fig.colorbar(im, ax=ax2, label="PINN − exact (m)")
+    ax2 = fig.add_subplot(gs[1, 1])
+    # Colour limit from the error OUTSIDE the x < 2% L, t < 5% t_max corner,
+    # where s jumps 0 -> s_w and the exact solution is discontinuous; the
+    # corner saturates (bar arrows) instead of flattening the whole map.
+    lim = maxe_in if maxe_in > 0 else maxe
+    im = ax2.pcolormesh(xg, tg, err, cmap=ps.CMAP_DIVERGING,
+                        vmin=-lim, vmax=lim, shading="auto", rasterized=True)
+    ps.field_axes(ax2)
+    ax2.set_xlabel("Distance (m)")
+    ax2.set_ylabel("Time (d)")
+    ax2.axvline(0.02 * a.L, color=ps.INK, lw=0.8, ls=":")
+    ps.colorbar(fig, im, ax2, "PINN $-$ exact (m)", location="right",
+                extend="both" if maxe > lim else "neither")
+    m_, e_ = f"{rmse:.1e}".split("e")
+    ax2.text(0.97, 0.95, rf"RMSE ${m_}\times10^{{{int(e_)}}}$ m",
+             transform=ax2.transAxes,
+             ha="right", va="top", bbox=dict(fc="white", ec="none", pad=1.5))
+    ps.panel_label(ax2, "c")
 
-    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
-    fig.savefig(a.out, dpi=a.dpi, bbox_inches="tight")
-    print(f"\nwrote {a.out}")
+    for pth in ps.save(fig, a.out):
+        print(f"\nwrote {pth}")
 
     if a.json:
         os.makedirs(os.path.dirname(a.json) or ".", exist_ok=True)

@@ -29,7 +29,18 @@ happens. Getting it wrong produces a plausible-looking field in which the
 slope is stabilised by the thing that should destabilise it.
 
     PYTHONPATH=. python scripts/make_fig6.py runs/ansatz/exp_seed7/ckpt_final.pt
-    PYTHONPATH=. python scripts/make_fig6.py CKPT --t 30 --out docs/fig6.png
+    PYTHONPATH=. python scripts/make_fig6.py CKPT --t 30 --out docs/figs/fig6.png
+
+FIGURE (thesis layout): two full-width panels at true scale -- (a) |d| as a
+filled field with the displacement DIRECTION overlaid as unit arrows on a
+regular grid, (b) Hoek-Brown FS on a diverging scale centred on FS = 1 with
+the FS = 1 contour drawn.
+Fields are drawn on a triangulation of the evaluated points with every
+triangle outside the concave domain removed, so nothing is interpolated
+across the excavation. Style: `src/plot_style.py`; PNG (300 dpi) + PDF.
+
+CAPTION MUST SAY (O-14): sigma_3 < 0 is clipped to 0 in the FS, which credits
+tensile points with the rock-mass UCS; the JSON `tension` block counts them.
 """
 import argparse
 import json
@@ -40,7 +51,10 @@ import torch
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.tri as mtri
+from matplotlib.colors import TwoSlopeNorm
 
+from src import plot_style as ps
 from src.config import bounds_from_geometry, full
 from src.materials import load_materials
 from src.mechanics import total_stress_star
@@ -170,6 +184,78 @@ def tension_census(s3_pa, sigma_t_pa, fs) -> dict:
             "n_hidden_by_clip": int((beyond & ~below).sum())}
 
 
+def draw_fields(X, Zc, Ud, Vd, MAG, FS, frac_all, t_days, out, n_arrows=30):
+    """Two stacked full-width panels, true scale. Pure numpy/matplotlib.
+
+    (a) |d| as a filled field with the displacement DIRECTION overlaid as
+        unit arrows on a regular grid (white, outlined, so they read on every
+        colour of the map); (b) Hoek-Brown FS, diverging about FS = 1.
+    """
+    tri = ps.masked_triangulation(X, Zc)
+    fig, axes = plt.subplots(2, 1, figsize=(ps.WIDTH, 7.3), sharex=True,
+                             layout="constrained")
+    fig.get_layout_engine().set(h_pad=0.04, hspace=0.02)
+    x0, x1, z0, z1 = ps.domain_extent()
+
+    # (a) The baseline field is micrometre-scale and nearly uniform, so the
+    # scale spans the data's own p0.5-p99.5 range (a 0-based scale renders one
+    # flat colour); out-of-range points saturate, as the bar's arrows say.
+    unit, fac = ((r"$\mu$m", 1e6) if np.nanmax(MAG) < 1e-3 else ("mm", 1e3))
+    dd = MAG * fac
+    lo_, hi_ = (float(v) for v in np.nanpercentile(dd, [0.5, 99.5]))
+    if hi_ <= lo_:
+        lo_, hi_ = float(np.nanmin(dd)), float(np.nanmax(dd)) + 1e-12
+    lv = np.linspace(lo_, hi_, 21)
+    c0 = axes[0].tricontourf(tri, dd, levels=lv, cmap=ps.CMAP_MAGNITUDE,
+                             extend="both")
+    ticks = [t for t in plt.MaxNLocator(5).tick_values(lo_, hi_)
+             if lo_ - 1e-12 <= t <= hi_ + 1e-12]
+    ps.colorbar(fig, c0, axes[0], rf"$|\mathbf{{d}}|$ ({unit})", ticks=ticks)
+
+    gx = np.linspace(x0 + 5, x1 - 5, n_arrows)
+    gz = np.arange(z0 + 6, z1, gx[1] - gx[0])
+    GX, GZ = np.meshgrid(gx, gz)
+    iu = mtri.LinearTriInterpolator(tri, Ud)(GX, GZ)
+    iv = mtri.LinearTriInterpolator(tri, Vd)(GX, GZ)
+    ok = ~(np.ma.getmaskarray(iu) | np.ma.getmaskarray(iv))
+    u_, v_ = np.asarray(iu)[ok], np.asarray(iv)[ok]
+    m_ = np.hypot(u_, v_)
+    nz = m_ > 0
+    axes[0].quiver(GX[ok][nz], GZ[ok][nz], (u_ / m_)[nz], (v_ / m_)[nz],
+                   angles="xy", scale_units="xy",
+                   scale=1.0 / (0.78 * (gx[1] - gx[0])), width=0.0042,
+                   headwidth=3.4, headlength=4.0, headaxislength=3.6,
+                   pivot="mid", color="white", edgecolor=ps.INK,
+                   linewidth=0.45, zorder=7)
+
+    # (b) FS = inf (sigma_1 <= 0) and FS > 3 are drawn at the top colour; the
+    # bar's arrow says so. (Clipping to exactly 3.0 left them unfilled.)
+    fsc = np.minimum(np.where(np.isfinite(FS), FS, 10.0), 10.0)
+    c2 = axes[1].tricontourf(tri, fsc, levels=np.linspace(0, 3, 25),
+                             cmap=ps.CMAP_FS, extend="max",
+                             norm=TwoSlopeNorm(vcenter=1.0, vmin=0.0, vmax=3.0))
+    axes[1].tricontour(tri, fsc, levels=[1.0], colors=ps.INK, linewidths=1.0)
+    ps.colorbar(fig, c2, axes[1], r"FS $= \sigma_{1,\mathrm{env}}/\sigma_1$",
+                ticks=[0, 0.5, 1, 1.5, 2, 2.5, 3])
+    axes[1].text(0.86, 0.04, f"FS < 1: {100*frac_all:.2f}% of points",
+                 transform=axes[1].transAxes, ha="right", va="bottom",
+                 bbox=dict(boxstyle="square,pad=0.2", fc="white", ec="none",
+                           alpha=0.9))
+
+    for ax, letter in zip(axes, "ab"):
+        ps.field_axes(ax)
+        ax.set_aspect("equal")
+        ps.domain_outline(ax, lw=0.9)
+        ps.draw_strata(ax, fill=False, lines=True, lw=0.6, color=ps.GREY)
+        ax.set_ylabel("$z$ (m)")
+        ax.set_xlim(x0, x1)
+        ax.set_ylim(z0, z1)
+        ax.text(0.015, 0.975, f"({letter})  $t$ = {t_days:g} d, SRF = 1",
+                transform=ax.transAxes, ha="left", va="top", zorder=20)
+    axes[-1].set_xlabel("$x$ (m)")
+    ps.save(fig, out)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description=__doc__,
@@ -180,7 +266,8 @@ def main(argv=None):
     ap.add_argument("--sampling-seed", type=int, default=20260808)
     ap.add_argument("--mode", default=None, choices=("unbounded", "cap", "exp"))
     ap.add_argument("--eps-psi", type=float, default=None)
-    ap.add_argument("--out", default="docs/fig6.png")
+    ap.add_argument("--out", default="docs/figs/fig6.png",
+                    help="PNG path; a PDF is written next to it")
     ap.add_argument("--json", default="docs/fig6_elastic_check.json")
     ap.add_argument("--no-bishop", action="store_true",
                     help="evaluate FS on sigma_0 + D:eps WITHOUT the Bishop "
@@ -196,8 +283,10 @@ def main(argv=None):
     ap.add_argument("--mask-sweep", default="0,1,2,3,4,5,7.5,10,15,20",
                     help="comma-separated distances (m) for the sensitivity "
                          "table printed and written alongside the headline")
-    ap.add_argument("--dpi", type=int, default=200)
+    ap.add_argument("--arrows", type=int, default=30,
+                    help="arrow grid columns in panel (b)")
     a = ap.parse_args(argv)
+    ps.apply()
     if a.surface_mask_m < 0:
         ap.error("--surface-mask-m must be >= 0")
     sweep = [float(v) for v in a.mask_sweep.split(",") if v.strip()]
@@ -376,34 +465,8 @@ def main(argv=None):
         "free-surface artefact."))
 
     # -- figure -------------------------------------------------------------
-    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.1))
-    sc0 = axes[0].scatter(X, Zc, c=MAG, s=3, cmap="magma")
-    axes[0].set_title(f"displacement magnitude, t = {a.t:g} d")
-    fig.colorbar(sc0, ax=axes[0], label="|d| (m)")
-
-    step = max(1, len(X) // 700)
-    axes[1].quiver(X[::step], Zc[::step], Ud[::step], Vd[::step],
-                   MAG[::step], cmap="magma", scale_units="xy", angles="xy")
-    axes[1].set_title("displacement direction")
-
-    fsc = np.clip(FS, 0, 3)
-    sc2 = axes[2].scatter(X, Zc, c=fsc, s=3, cmap="RdYlGn", vmin=0, vmax=3)
-    axes[2].set_title(f"Hoek–Brown FS at SRF = 1  "
-                      f"({100*frac_all:.2f}% below 1)")
-    fig.colorbar(sc2, ax=axes[2], label="$\\sigma_{1,env}/\\sigma_1$")
-
-    for ax in axes:
-        ax.set_xlabel("x (m)")
-        ax.set_xlim(g.X_MIN, g.X_MAX)
-        # Data reaches the natural ground above the crest, so Z_CREST as a
-        # ceiling silently clips the upper slope.
-        ax.set_ylim(g.Z_BASE, max(g.Z_CREST, float(Zc.max())) + 2.0)
-    axes[0].set_ylabel("elevation (m)")
-    fig.tight_layout()
-
-    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
-    fig.savefig(a.out, dpi=a.dpi)
-    print(f"\nwrote {a.out}")
+    draw_fields(X, Zc, Ud, Vd, MAG, FS, frac_all, a.t, a.out, a.arrows)
+    print(f"wrote {a.out} (+ .pdf)")
 
     if a.json:
         with open(a.json, "w") as f:

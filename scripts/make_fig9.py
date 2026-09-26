@@ -16,6 +16,18 @@ line is not a slip surface. The ratio is reported, not thresholded.
 Reports per run: localisation intensity (peak/median gamma_max) and band
 width. If the band width changes materially with --nx/--nz the band is a
 resolution artefact (failure_surface.band_width docstring) -- run twice.
+
+FIGURE (revision 4, thesis layout): one full-width panel per run at true
+scale, ALL on one shared log10(gamma_max) colour scale (one colour bar), the
+strata contacts overlaid, the extracted ridge in white-edged black, and a
+crest inset with unit displacement-direction arrows. The old
+"extracted surfaces" summary panel is gone: the ridge is on each panel.
+Style: `src/plot_style.py`; PNG (300 dpi) + PDF; JSON unchanged.
+
+CAPTION MUST SAY (D-5.15): the state shown is `failed` (first SRF at which
+the calibrated criterion fired) and why; LI/LI(start) per run; that a
+continuum without bedding planes cannot represent the bedding-plane slides
+Ulusay et al. (2014) report.
 """
 import argparse
 import dataclasses
@@ -26,9 +38,11 @@ import sys
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
 import numpy as np
 import torch
 
+from src import plot_style as ps
 from src import failure_surface as fsurf
 from src.config import BOUNDS, tiny
 from src.mechanics import strain_star, uv_of
@@ -81,14 +95,16 @@ def _load_net(path):
     return net, d
 
 
-def gamma_grid(net, t_days, nx, nz, chunk=4096):
+def gamma_grid(net, t_days, nx, nz, chunk=4096, with_uv=False):
     xs = np.linspace(g.X_MIN, g.X_MAX, nx)
     zs = np.linspace(g.Z_BASE, float(g.z_ground(xs).max()), nz)
     X, Z = np.meshgrid(xs, zs)
     inside = np.asarray(g.inside_domain(X, Z), bool)
     G = np.full(X.shape, np.nan)
+    U = np.full(X.shape, np.nan)
+    V = np.full(X.shape, np.nan)
     px, pz = X[inside], Z[inside]
-    vals = []
+    vals, us, vs = [], [], []
     for i in range(0, px.size, chunk):
         x = torch.tensor(px[i:i + chunk] / SCALES.L_ref).reshape(-1, 1).requires_grad_(True)
         z = torch.tensor(pz[i:i + chunk] / SCALES.L_ref).reshape(-1, 1).requires_grad_(True)
@@ -98,8 +114,58 @@ def gamma_grid(net, t_days, nx, nz, chunk=4096):
         vals.append(fsurf.gamma_max(exx.detach().numpy().ravel(),
                                     ezz.detach().numpy().ravel(),
                                     exz.detach().numpy().ravel()))
+        us.append(u.detach().numpy().ravel())
+        vs.append(v.detach().numpy().ravel())
     G[inside] = np.concatenate(vals)
+    if with_uv:
+        U[inside] = np.concatenate(us)
+        V[inside] = np.concatenate(vs)
+        return X, Z, G, inside, U, V
     return X, Z, G, inside
+
+
+#: Crest window for the inset (m): the cut-face top, bench and the Mk / Mk_d
+#: contact, where the Phase 5 strain concentrates.
+CREST_WIN = (80.0, 135.0, 300.0, 342.0)
+
+
+def _crest_inset(ax, X, Z, LG, U, V, xr, zr, norm):
+    """Zoom on the crest with unit displacement-direction arrows."""
+    xa, xb, za, zb = CREST_WIN
+    ins = ax.inset_axes([0.58, 0.035, 0.41, 0.54])
+    ins.set_facecolor("white")        # nothing of the main panel shows through
+    ins.set_anchor("SE")
+    ins.set_zorder(12)                # above the main panel's ridge line
+    ins.pcolormesh(X, Z, LG, shading="auto", cmap=ps.CMAP_MAGNITUDE,
+                   norm=norm, rasterized=True)
+    ps.draw_strata(ins, fill=False, lines=True, lw=0.8, color="white",
+                   x=(xa, xb), z=(za, zb), nx=200, nz=160)
+    ps.domain_outline(ins, lw=0.9)
+    ins.plot(xr, zr, "-", color="black", lw=2.0)
+    ins.plot(xr, zr, "-", color="white", lw=0.8)
+    m = ((X >= xa) & (X <= xb) & (Z >= za) & (Z <= zb) & np.isfinite(U)
+         & np.isfinite(V))
+    step = max(1, int(np.ceil(np.sqrt(m.sum() / 60.0))))
+    sub = np.zeros_like(m)
+    sub[::step, ::step] = True
+    k = m & sub
+    mag = np.hypot(U[k], V[k])
+    ok = mag > 0
+    if ok.any():
+        ins.quiver(X[k][ok], Z[k][ok], (U[k] / mag)[ok], (V[k] / mag)[ok],
+                   angles="xy", pivot="mid", color="white", edgecolor=ps.INK,
+                   linewidth=0.4, scale=16, width=0.011, headwidth=3.5,
+                   headlength=4, headaxislength=3.6, zorder=7)
+    ins.set(xlim=(xa, xb), ylim=(za, zb))
+    ins.set_aspect("equal")
+    ps.field_axes(ins)
+    ins.set_xticks([])
+    ins.set_yticks([])
+    for sp in ins.spines.values():
+        sp.set_edgecolor(ps.INK)
+        sp.set_linewidth(1.1)
+    ax.indicate_inset_zoom(ins, edgecolor=ps.INK, alpha=1.0, lw=0.9)
+    return ins
 
 
 def main(argv=None):
@@ -114,13 +180,13 @@ def main(argv=None):
     ap.add_argument("--out", default="docs/figs/fig9.png")
     a = ap.parse_args(argv)
 
+    ps.apply()
     n = len(a.run)
-    fig, axes = plt.subplots(n + 1, 1, figsize=(8, 3.2 * (n + 1)))
-    summary, xg = [], np.linspace(g.X_MIN, g.X_MAX, 400)
+    fields, summary = [], []
     for i, run in enumerate(a.run):
         p, srf = state_path(run, a.state)
         net, d = _load_net(p)
-        X, Z, G, inside = gamma_grid(net, a.t, a.nx, a.nz)
+        X, Z, G, inside, U, V = gamma_grid(net, a.t, a.nx, a.nz, with_uv=True)
         net0, _ = _load_net(start_state_path(run))
         _, _, G0, _ = gamma_grid(net0, a.t, a.nx, a.nz)
         li0 = fsurf.localisation_intensity(G0, inside)
@@ -136,27 +202,44 @@ def main(argv=None):
                "grid": [a.nx, a.nz], "ridge_x": xr.tolist(), "ridge_z": zr.tolist()}
         rec["li_ratio_vs_start"] = rec["localisation_intensity"] / li0
         summary.append(rec)
-        ax = axes[i]
-        im = ax.pcolormesh(X, Z, np.log10(G), shading="auto", cmap="viridis")
-        fig.colorbar(im, ax=ax, label=r"$\log_{10}\gamma_{max}$")
-        ax.plot(xr, zr, "r-", lw=1.2)
-        ax.plot(xg, g.z_ground(xg), "k-", lw=0.8)
-        ax.set(title=f"{crit}  SRF {srf:.3f} ({a.state})  "
-                     f"LI {rec['localisation_intensity']:.1f} "
-                     f"({rec['li_ratio_vs_start']:.1f}x SRF-start)", ylabel="z (m)")
-        axes[n].plot(xr, zr, "-", lw=1.5, label=f"{crit} SRF {srf:.3f}")
+        fields.append((X, Z, G, U, V, xr, zr, crit, srf, rec))
         print(f"{run}: SRF {srf:.3f}  ridge points {xr.size}  "
               f"LI {rec['localisation_intensity']:.2f}  "
               f"band width {rec['band_width_m']:.2f} m  "
               f"LI/LI(start) {rec['li_ratio_vs_start']:.2f}")
         print("  A ridge is only a failure surface if a band formed: read "
               "LI/LI(start) before the red line.")
-    axes[n].plot(xg, g.z_ground(xg), "k-", lw=0.8)
-    axes[n].set(title="extracted surfaces", xlabel="x (m)", ylabel="z (m)")
-    axes[n].legend(fontsize=7)
-    fig.tight_layout()
-    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
-    fig.savefig(a.out, dpi=200)
+
+    # ONE colour scale for every panel (revision 4): the p1-p99.9 range of
+    # log10(gamma_max) over all runs, so equal colours mean equal strain.
+    allg = np.concatenate([np.log10(f[2][np.isfinite(f[2]) & (f[2] > 0)])
+                           for f in fields])
+    norm = Normalize(*np.percentile(allg, [1.0, 99.9]))
+    x0, x1, z0, z1 = ps.domain_extent()
+    fig, axes = plt.subplots(n, 1, figsize=(ps.WIDTH, 3.05 * n + 0.95),
+                             sharex=True, squeeze=False, layout="constrained")
+    axes = axes[:, 0]
+    for i, (ax, (X, Z, G, U, V, xr, zr, crit, srf, rec)) in enumerate(
+            zip(axes, fields)):
+        with np.errstate(divide="ignore", invalid="ignore"):
+            LG = np.log10(G)
+        im = ax.pcolormesh(X, Z, LG, shading="auto", cmap=ps.CMAP_MAGNITUDE,
+                           norm=norm, rasterized=True)
+        ps.field_axes(ax)
+        ax.set_aspect("equal")
+        ps.draw_strata(ax, fill=False, lines=True, lw=0.8, color="white")
+        ps.domain_outline(ax, lw=0.9)
+        ax.plot(xr, zr, "-", color="black", lw=2.4, zorder=8)
+        ax.plot(xr, zr, "-", color="white", lw=1.0, zorder=9)
+        ax.set(xlim=(x0, x1), ylim=(z0, z1), ylabel="$z$ (m)")
+        ax.text(0.015, 0.975, f"({'abcdefgh'[i]})  {crit}, SRF {srf:.3f} "
+                f"({a.state}); LI/LI$_0$ = {rec['li_ratio_vs_start']:.0f}",
+                transform=ax.transAxes, ha="left", va="top", zorder=20)
+        _crest_inset(ax, X, Z, LG, U, V, xr, zr, norm)
+    axes[-1].set_xlabel("$x$ (m)")
+    ps.colorbar(fig, im, axes.tolist(), r"$\log_{10}\gamma_{\max}$",
+                location="bottom", fraction=0.04, pad=0.01, aspect=35)
+    ps.save(fig, a.out)
     with open(os.path.splitext(a.out)[0] + ".json", "w") as f:
         json.dump(summary, f, indent=1)
     print(f"wrote {a.out}")

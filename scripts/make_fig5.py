@@ -19,7 +19,15 @@ The colour scale is shared across the time panels so they are comparable; the
 difference panels get their own symmetric scale about zero.
 
     PYTHONPATH=. python scripts/make_fig5.py runs/ansatz/exp_seed7/ckpt_final.pt
-    PYTHONPATH=. python scripts/make_fig5.py CKPT --out docs/fig5.png --n 220
+    PYTHONPATH=. python scripts/make_fig5.py CKPT --out docs/figs/fig5.png --n 220
+
+LAYOUT (thesis, A4 portrait): one ROW per time, two columns -- psi | psi -
+psi_0 -- at true scale (equal aspect), 6.25 in wide. Each column has ONE
+horizontal colour bar shared by all its rows, so the times are directly
+comparable. Style: `src/plot_style.py`. Writes PNG (300 dpi) and PDF.
+
+CAPTION MUST SAY (O-21): the hydraulic field is essentially static over the
+30-day window; the departure column is the evidence, not a plotting fault.
 """
 import argparse
 import os
@@ -29,7 +37,9 @@ import torch
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.colors import TwoSlopeNorm
 
+from src import plot_style as ps
 from src.config import bounds_from_geometry, full
 from src.loss import psi_of
 from src.model import PINN, NearPhysical
@@ -71,12 +81,17 @@ def main(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("ckpt")
     ap.add_argument("--t", type=float, nargs="+", default=[0.0, 1.0, 7.0, 30.0])
-    ap.add_argument("--n", type=int, default=200, help="grid points per axis")
+    ap.add_argument("--n", type=int, default=320, help="grid points per axis")
+    ap.add_argument("--dpct", type=float, default=99.5,
+                    help="departure colour limit = this percentile of "
+                         "|psi - psi_0| over all panels; values beyond it "
+                         "saturate (bar arrows). 100 = the plain maximum.")
     ap.add_argument("--mode", default=None, choices=("unbounded", "cap", "exp"))
     ap.add_argument("--eps-psi", type=float, default=None)
-    ap.add_argument("--out", default="docs/fig5.png")
-    ap.add_argument("--dpi", type=int, default=200)
+    ap.add_argument("--out", default="docs/figs/fig5.png",
+                    help="PNG path; a PDF is written next to it")
     a = ap.parse_args(argv)
+    ps.apply()
 
     BOUNDS = bounds_from_geometry(t_max=30.0, s=SCALES)
     cfg = full()
@@ -89,7 +104,10 @@ def main(argv=None):
 
     # Grid over the geometry bbox, masked to the domain.
     xs = np.linspace(g.X_MIN, g.X_MAX, a.n)
-    zs = np.linspace(g.Z_BASE, g.Z_CREST, a.n)
+    # Up to the highest ground point, not Z_CREST: the natural ground behind
+    # the crest rises to ~358 m, and a Z_CREST ceiling silently cut the upper
+    # Mk_d out of every panel.
+    zs = np.linspace(g.Z_BASE, float(np.max(g.z_ground(xs))), a.n)
     X, Z = np.meshgrid(xs, zs)
     inside = np.asarray(g.inside_domain(X.ravel(), Z.ravel())).reshape(X.shape)
     print(f"grid {a.n}x{a.n}, {inside.sum()} points inside the domain "
@@ -126,35 +144,56 @@ def main(argv=None):
 
     vmin = float(np.nanmin(fields))
     vmax = float(np.nanmax(fields))
-    dmax = float(np.nanmax(np.abs(diffs))) or 1.0
+    dabs = np.abs(np.asarray(diffs))
+    dtrue = float(np.nanmax(dabs)) or 1.0
+    dmax = float(np.nanpercentile(dabs, a.dpct)) or dtrue
+    print(f"departure colour limit +/-{dmax:.3g} m (p{a.dpct:g}); true max "
+          f"{dtrue:.3g} m" + ("  -- beyond-limit values saturate"
+                              if dtrue > dmax * 1.001 else ""))
 
     nt = len(a.t)
-    fig, axes = plt.subplots(2, nt, figsize=(3.5 * nt, 6.4), squeeze=False)
-    ext = [g.X_MIN, g.X_MAX, g.Z_BASE, g.Z_CREST]
+    fig, axes = plt.subplots(nt, 2, figsize=(ps.WIDTH, 1.55 * nt + 1.55),
+                             sharex=True, sharey=True, squeeze=False,
+                             layout="constrained")
+    fig.get_layout_engine().set(w_pad=0.03, h_pad=0.03, wspace=0.02,
+                                hspace=0.02)
+    xs_top = np.linspace(g.X_MIN, g.X_MAX, 600)
 
+    norm_d = TwoSlopeNorm(vcenter=0.0, vmin=-dmax, vmax=dmax)
     for j, t_days in enumerate(a.t):
-        im = axes[0][j].imshow(fields[j], origin="lower", extent=ext,
-                               aspect="auto", cmap="viridis",
-                               vmin=vmin, vmax=vmax)
-        axes[0][j].set_title(f"t = {t_days:g} d")
-        if j == 0:
-            axes[0][j].set_ylabel(r"$\psi$  (m head)" + "\nelevation (m)")
-        im2 = axes[1][j].imshow(diffs[j], origin="lower", extent=ext,
-                                aspect="auto", cmap="RdBu_r",
-                                vmin=-dmax, vmax=dmax)
-        axes[1][j].set_xlabel("x (m)")
-        if j == 0:
-            axes[1][j].set_ylabel(r"$\psi - \psi_0$  (m)" + "\nelevation (m)")
+        a0, a1 = axes[j]
+        im = a0.pcolormesh(X, Z, fields[j], cmap=ps.CMAP_FIELD, vmin=vmin,
+                           vmax=vmax, shading="auto", rasterized=True)
+        im2 = a1.pcolormesh(X, Z, diffs[j], cmap=ps.CMAP_DIVERGING,
+                            norm=norm_d, shading="auto", rasterized=True)
+        for ax in (a0, a1):
+            ps.field_axes(ax)
+            ax.set_aspect("equal")
+            ps.domain_outline(ax, lw=0.8)
+        # Letter and time share the empty sky above the cut face.
+        for k, ax in enumerate((a0, a1)):
+            ax.text(0.015, 0.975, f"({'abcdefghijklmnop'[2 * j + k]})  "
+                    f"$t$ = {t_days:g} d", transform=ax.transAxes, ha="left",
+                    va="top", zorder=20)
+        a0.set_ylabel("$z$ (m)")
+    axes[0][0].set_title(r"Pressure head $\psi$")
+    axes[0][1].set_title(r"Departure from IC, $\psi - \psi_0$")
+    for ax in axes[-1]:
+        ax.set_xlabel("$x$ (m)")
+    x0, x1, z0, z1 = ps.domain_extent()
+    axes[0][0].set_xlim(x0, x1)
+    axes[0][0].set_ylim(z0, z1)
 
-    fig.colorbar(im, ax=axes[0].tolist(), shrink=0.85, label=r"$\psi$ (m)")
-    fig.colorbar(im2, ax=axes[1].tolist(), shrink=0.85,
-                 label=r"$\psi-\psi_0$ (m)")
-    fig.suptitle("Pore-pressure head field and departure from the initial "
-                 "condition", y=0.99)
+    ps.colorbar(fig, im, axes[:, 0].tolist(), r"$\psi$ (m of head)",
+                location="bottom", fraction=0.035, pad=0.01, aspect=30)
+    cb = ps.colorbar(fig, im2, axes[:, 1].tolist(),
+                     r"$\psi - \psi_0$ (m)", location="bottom",
+                     fraction=0.035, pad=0.01, aspect=30,
+                     extend="both" if dtrue > dmax * 1.001 else "neither")
+    cb.formatter.set_powerlimits((-2, 3))
 
-    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
-    fig.savefig(a.out, dpi=a.dpi, bbox_inches="tight")
-    print(f"\nwrote {a.out}")
+    for p in ps.save(fig, a.out):
+        print(f"wrote {p}")
 
     span = float(np.nanmax(np.abs(diffs[-1])))
     print(f"\nlargest |psi - psi_0| at t = {a.t[-1]:g} d: {span:.3f} m")

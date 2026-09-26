@@ -6,6 +6,10 @@ so the schematic cannot drift from the network that produced the results.
 
 Draw it from the checkpoint the results come from (D-5.6: the production
 baseline, not baseline-v1).
+
+Style: `src/plot_style.py`. Drawn at the full 6.25 in text width with 12 pt
+text; `draw` refuses to write a figure in which any label spills out of its
+box. Writes PNG (300 dpi) and PDF.
 """
 import argparse
 import os
@@ -17,75 +21,159 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 import torch
 
+from src import plot_style as ps
 from src.weighting import TERMS
 
 
+#: Box colour families: data in/out, network, physics, optimisation.
+FAMILY = {"inputs": ps.COBALT, "outputs": ps.COBALT,
+          "net": ps.PURPLE, "ansatz": ps.PURPLE,
+          "autograd": ps.VERMILION, "losses": ps.VERMILION,
+          "balancer": ps.EMERALD, "optim": ps.EMERALD}
+TINT = {ps.COBALT: "#E8EEFD", ps.PURPLE: "#F1EAFE", ps.VERMILION: "#FDECE7",
+        ps.EMERALD: "#E3F6EF"}
+
+
+def _fmt(v) -> str:
+    return f"{v:g}" if isinstance(v, float) else str(v)
+
+
 def describe(cfg: dict) -> dict:
-    """Text for each box. Missing keys raise: a schematic with guessed
-    numbers is worse than none."""
+    """Text for each box, 'Heading\nbody'. Missing keys raise: a schematic
+    with guessed numbers is worse than none."""
     need = ("layers", "width", "ansatz", "eps_psi", "n_pde", "n_bc", "epochs")
     miss = [k for k in need if k not in cfg]
     if miss:
         raise KeyError(f"checkpoint cfg lacks {miss}")
     lb = cfg.get("lbfgs_epochs") or 0
-    return {
-        "inputs": "inputs\n(x*, z*, t*)\nnon-dimensional",
-        "net": f"fully connected\n{cfg['layers']} x {cfg['width']}, tanh",
-        "ansatz": f"near-physical ansatz\nmode = {cfg['ansatz']}\n"
-                  f"eps_psi = {cfg['eps_psi']}",
-        "outputs": "outputs\npsi (head), u, v",
-        "autograd": "autograd\n1st and 2nd derivatives",
-        "losses": "loss terms\n" + "\n".join(TERMS) + "\n+ w_yield * L_yield (SSR)",
-        "balancer": f"loss balancer\nupdate every {cfg.get('every', '?')}, "
-                    f"lambda {cfg.get('lam', '?')}",
-        "optim": f"Adam {cfg['epochs']:,} epochs"
-                 + (f"\n-> L-BFGS {lb}" if lb else "")
-                 + f"\nN_PDE {cfg['n_pde']:,}, N_BC {cfg['n_bc']:,}",
+    terms = list(TERMS)
+    pairs = [", ".join(terms[i:i + 2]) for i in range(0, len(terms), 2)]
+    ans = [f"mode = {cfg['ansatz']}",
+           rf"$\varepsilon_\psi$ = {_fmt(cfg['eps_psi'])}"]
+    if cfg.get("eps_uv") is not None:
+        ans.append(rf"$\varepsilon_{{uv}}$ = {_fmt(cfg['eps_uv'])}")
+    boxes = {
+        "inputs": ("Inputs", "$x^*,\\ z^*,\\ t^*$\n(non-dimensional)"),
+        "net": ("Network", f"fully connected\n{cfg['layers']} x {cfg['width']}, tanh"),
+        "ansatz": ("Ansatz", "\n".join(ans)),
+        "outputs": ("Outputs", "$\\psi$ (head)\n$u,\\ v$ (displ.)"),
+        "autograd": ("Autograd", "1st and 2nd\nderivatives"),
+        "losses": ("Loss terms",
+                   "\n".join(pairs)
+                   + "\n+ $w_{\\mathrm{yield}}\\,\\mathcal{L}_{\\mathrm{yield}}$ (SSR)"),
+        "balancer": ("Loss balancer",
+                     f"weights $w_i$, update every {cfg.get('every', '?')}, "
+                     f"$\\lambda$ = {_fmt(cfg.get('lam', '?'))}"),
+        "optim": ("Optimiser",
+                  f"Adam {cfg['epochs']:,} epochs"
+                  + (f"\n→ L-BFGS {lb}" if lb else "")
+                  + f"\n$N_{{\\mathrm{{PDE}}}}$ = {cfg['n_pde']:,}"
+                  + f"\n$N_{{\\mathrm{{BC}}}}$ = {cfg['n_bc']:,}"),
     }
+    return {k: f"{h}\n{b}" for k, (h, b) in boxes.items()}
 
 
-def draw(text: dict, out: str, dpi=200):
-    fig, ax = plt.subplots(figsize=(11, 4.6))
-    ax.set_xlim(0, 11)
-    ax.set_ylim(0, 4.6)
+#: Canvas width: the text block less the 2 x 0.05 in the tight crop adds.
+CANVAS_W = ps.WIDTH - 2 * ps.PAD
+#: (x, y, w, h) in inches on the CANVAS_W x CANVAS_H canvas. Row 1 is the forward
+#: pass, row 2 the physics and the optimiser, row 3 the balancer.
+W_BOX = (CANVAS_W - 3 * 0.24) / 4
+BOXES = {"inputs": (0.00, 3.08, W_BOX, 1.04),
+         "net": (W_BOX + 0.24, 3.08, W_BOX, 1.04),
+         "ansatz": (2 * (W_BOX + 0.24), 3.08, W_BOX, 1.04),
+         "outputs": (3 * (W_BOX + 0.24), 3.08, W_BOX, 1.04),
+         "optim": (0.00, 1.40, 2.02, 1.18),
+         "losses": (2.34, 1.08, 2.30, 1.52),
+         "autograd": (3 * (W_BOX + 0.24), 1.51, W_BOX, 0.96),
+         "balancer": (0.90, 0.02, 4.45, 0.62)}
+CANVAS_H = 4.14
+INSET = 0.04        # the drawn patch sits this far inside its (x, y, w, h)
+
+
+def draw(text: dict, out: str):
+    ps.apply()
+    fig = plt.figure(figsize=(CANVAS_W, CANVAS_H))
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, CANVAS_W)
+    ax.set_ylim(0, CANVAS_H)
     ax.axis("off")
-    boxes = {"inputs": (0.2, 2.6, 1.6, 1.3), "net": (2.3, 2.6, 1.9, 1.3),
-             "ansatz": (4.7, 2.6, 2.0, 1.3), "outputs": (7.2, 2.6, 1.7, 1.3),
-             "autograd": (7.2, 0.4, 1.7, 1.3), "losses": (4.4, 0.1, 2.5, 2.1),
-             "balancer": (2.1, 0.4, 2.0, 1.3), "optim": (9.2, 1.4, 1.7, 1.7)}
-    ax.set_ylim(0, 5.2)
-    for k, (x, y, w, h) in boxes.items():
-        ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.05",
-                                    fc="#eef3f8", ec="#34506b", lw=1.2))
-        ax.text(x + w / 2, y + h / 2, text[k], ha="center", va="center",
-                fontsize=7.5)
+    texts = {}
+    for k, (x, y, w, h) in BOXES.items():
+        col = FAMILY[k]
+        ax.add_patch(FancyBboxPatch((x + INSET, y + INSET), w - 2 * INSET,
+                                    h - 2 * INSET,
+                                    boxstyle="round,pad=0.04,rounding_size=0.10",
+                                    fc=TINT[col], ec=col, lw=1.4, zorder=2))
+        head, body = text[k].split("\n", 1)
+        if k == "balancer":          # one-line box: heading and body side by side
+            t = ax.text(x + w / 2, y + h / 2, f"{head}: {body}", ha="center",
+                        va="center", zorder=3)
+            texts[k] = [t]
+            continue
+        t1 = ax.text(x + w / 2, y + h - 0.12, head, ha="center", va="top",
+                     fontweight="bold", color=col, zorder=3)
+        t2 = ax.text(x + w / 2, y + h - 0.40, body, ha="center", va="top",
+                     linespacing=1.15, zorder=3)
+        texts[k] = [t1, t2]
 
-    def arrow(pa, pb, label=None, rad=0.0):
-        ax.add_patch(FancyArrowPatch(pa, pb, arrowstyle="-|>", mutation_scale=12,
-                                     lw=1.1, color="#34506b",
+    def arrow(pa, pb, rad=0.0):
+        ax.add_patch(FancyArrowPatch(pa, pb, arrowstyle="-|>", mutation_scale=13,
+                                     lw=1.3, color=ps.INK, zorder=4,
+                                     shrinkA=0, shrinkB=0,
                                      connectionstyle=f"arc3,rad={rad}"))
-        if label:
-            ax.text((pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2 + 0.12, label,
-                    ha="center", fontsize=6.5, color="#34506b")
-    arrow((1.85, 3.25), (2.25, 3.25))                        # inputs -> net
-    arrow((4.25, 3.25), (4.65, 3.25))                        # net -> ansatz
-    arrow((6.75, 3.25), (7.15, 3.25))                        # ansatz -> outputs
-    arrow((8.05, 2.55), (8.05, 1.75))                        # outputs -> autograd
-    arrow((7.15, 1.05), (6.95, 1.05))                        # autograd -> losses
-    arrow((4.15, 1.05), (4.35, 1.05), "weights")             # balancer -> losses
-    arrow((6.95, 1.9), (9.15, 2.0), "weighted total")        # losses -> optimiser
-    arrow((10.05, 3.15), (3.25, 3.95), "update parameters", rad=0.25)  # optim -> net
-    fig.tight_layout()
-    os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
-    fig.savefig(out, dpi=dpi)
-    plt.close(fig)
+
+    def mid_y(k):
+        x, y, w, h = BOXES[k]
+        return y + h / 2
+
+    r1 = mid_y("inputs")
+    for a_, b_ in (("inputs", "net"), ("net", "ansatz"), ("ansatz", "outputs")):
+        xa, _, wa, _ = BOXES[a_]
+        xb = BOXES[b_][0]
+        arrow((xa + wa - 0.02, r1), (xb + 0.02, r1))
+    xo, yo, wo, ho = BOXES["outputs"]
+    xg, yg, wg, hg = BOXES["autograd"]
+    arrow((xo + wo / 2, yo + 0.02), (xg + wg / 2, yg + hg - 0.02))
+    xl, yl, wl, hl = BOXES["losses"]
+    arrow((xg + 0.02, mid_y("autograd")), (xl + wl - 0.02, mid_y("autograd")))
+    xp, yp, wp, hp = BOXES["optim"]
+    arrow((xl + 0.02, yp + hp / 2), (xp + wp - 0.02, yp + hp / 2))
+    xb, yb, wb, hb = BOXES["balancer"]
+    arrow((xl + wl / 2, yb + hb - 0.02), (xl + wl / 2, yl + 0.02))
+    xn, yn, wn, hn = BOXES["net"]
+    xa_ = xn + 0.35
+    arrow((xa_, yp + hp - 0.02), (xa_, yn + 0.02))
+    ax.text(xa_ - 0.08, (yp + hp + yn) / 2, r"update $\theta$", ha="right",
+            va="center", zorder=3)
+    ax.text(xl - 0.16, yp + hp / 2 + 0.10, r"$\mathcal{L}$", ha="center",
+            va="bottom", zorder=3)
+
+    # Every text must sit inside its box: at 12 pt there is no slack, and a
+    # label spilling over a border is the defect this check exists for.
+    fig.canvas.draw()
+    r = fig.canvas.get_renderer()
+    bad = []
+    for k, ts in texts.items():
+        x, y, w, h = BOXES[k]
+        box = ax.transData.transform([(x + INSET, y + INSET),
+                                      (x + w - INSET, y + h - INSET)])
+        for t in ts:
+            e = t.get_window_extent(r)
+            if (e.x0 < box[0][0] or e.x1 > box[1][0]
+                    or e.y0 < box[0][1] or e.y1 > box[1][1]):
+                bad.append(k)
+    if bad:
+        raise RuntimeError(f"fig2: text overflows box(es) {sorted(set(bad))}")
+    for p in ps.save(fig, out, fit=False):
+        print(f"wrote {p}")
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("ckpt")
-    ap.add_argument("--out", default="docs/figs/fig2.png")
+    ap.add_argument("--out", default="docs/figs/fig2.png",
+                    help="PNG path; a PDF is written next to it")
     a = ap.parse_args(argv)
     cfg = torch.load(a.ckpt, map_location="cpu", weights_only=False)["cfg"]
     draw(describe(cfg), a.out)
