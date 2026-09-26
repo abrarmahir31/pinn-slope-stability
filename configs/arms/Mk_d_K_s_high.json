@@ -1,0 +1,10 @@
+{
+ "factor": "Mk_d_K_s",
+ "level": "high",
+ "label": "Mk_d K_s x10",
+ "overrides": {
+  "ks_multiplier": {
+   "Mk_d": 10.0
+  }
+ }
+}

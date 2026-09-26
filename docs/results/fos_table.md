@@ -4,8 +4,29 @@ Runs marked `validation_only` used a D-5.6 validation baseline and must not be r
 
 | run | criterion | w_yield | norm | cold | kc | arm | FOS | bracket | status | headline |
 |---|---|---|---|---|---|---|---|---|---|---|
+| ssr_arm_Mk_d_GSI_high | GHB | 1.0 | raw | False | default | Mk_d_GSI:high | 2.051 | [2.046875, 2.054688] | fos | eligible |
+| ssr_arm_Mk_d_GSI_low | GHB | 1.0 | raw | False | default | Mk_d_GSI:low | 3.215 | [3.210938, 3.21875] | fos | eligible |
+| ssr_arm_Mk_d_GSI_low_common | GHB | 1.0 | raw | False | default | Mk_d_GSI:low | 1.043 | [1.039062, 1.046875] | fos | eligible |
+| ssr_arm_Mk_d_K_s_high | GHB | 1.0 | raw | False | default | Mk_d_K_s:high | 1.613 | [1.609375, 1.617188] | fos | eligible |
+| ssr_arm_Mk_d_K_s_high_common | GHB | 1.0 | raw | False | default | Mk_d_K_s:high | 1.480 | [1.476562, 1.484375] | fos | eligible |
+| ssr_arm_Mk_d_K_s_low | GHB | 1.0 | raw | False | default | Mk_d_K_s:low | 1.496 | [1.492188, 1.5] | fos | eligible |
+| ssr_arm_coupling_high | GHB | 1.0 | raw | False | all | coupling:high | 1.480 | [1.476562, 1.484375] | fos | eligible |
+| ssr_arm_coupling_low | GHB | 1.0 | raw | False | off | coupling:low | 1.496 | [1.492188, 1.5] | fos | eligible |
+| ssr_ghb_draw11 | GHB | 1.0 | raw | False | default | — | 1.645 | [1.640625, 1.648438] | fos | eligible |
+| ssr_ghb_draw11_lossfloor | GHB | 1.0 | raw | False | default | — | 1.434 | [1.429688, 1.4375] | fos | eligible |
+| ssr_ghb_draw12 | GHB | 1.0 | raw | False | default | — | 1.754 | [1.75, 1.757812] | fos | eligible |
+| ssr_ghb_draw12_lossfloor | GHB | 1.0 | raw | False | default | — | 1.465 | [1.460938, 1.46875] | fos | eligible |
+| ssr_ghb_draw13 | GHB | 1.0 | raw | False | default | — | 1.691 | [1.6875, 1.695312] | fos | eligible |
+| ssr_ghb_draw13_lossfloor | GHB | 1.0 | raw | False | default | — | 1.434 | [1.429688, 1.4375] | fos | eligible |
+| ssr_ghb_draw14 | GHB | 1.0 | raw | False | default | — | 1.449 | [1.445312, 1.453125] | fos | eligible |
+| ssr_ghb_n20000 | GHB | 1.0 | raw | False | default | — | 1.621 | [1.617188, 1.625] | fos | eligible |
+| ssr_ghb_n20000_wscaled | GHB | 0.5 | raw | False | default | — | 1.754 | [1.75, 1.757812] | fos | eligible |
+| ssr_ghb_n20000_wscaled_lossfloor | GHB | 0.5 | raw | False | default | — | 1.465 | [1.460938, 1.46875] | fos | eligible |
+| ssr_ghb_n5000 | GHB | 1.0 | raw | False | default | — | 1.488 | [1.484375, 1.492188] | fos | eligible |
+| ssr_ghb_n5000_wscaled | GHB | 2.0 | raw | False | default | — | 1.488 | [1.484375, 1.492188] | fos | eligible |
 | ssr_ghb_w0.3 | GHB | 0.3 | raw | False | default | — | 1.496 | [1.492188, 1.5] | fos | eligible |
 | ssr_ghb_w1 | GHB | 1.0 | raw | False | default | — | 1.488 | [1.484375, 1.492188] | fos | eligible |
+| ssr_ghb_w1_cold | GHB | 1.0 | raw | True | default | — | 1.723 | [1.71875, 1.726562] | fos | eligible |
 | ssr_ghb_w3 | GHB | 3.0 | raw | False | default | — | 1.520 | [1.515625, 1.523438] | fos | eligible |
 | ssr_mc_w0.3 | MC | 0.3 | raw | False | default | — | 1.520 | [1.515625, 1.523438] | fos | eligible |
 | ssr_mc_w1 | MC | 1.0 | raw | False | default | — | 1.527 | [1.523438, 1.53125] | fos | eligible |
@@ -18,6 +39,51 @@ Runs marked `validation_only` used a D-5.6 validation baseline and must not be r
  {
   "criterion": "GHB",
   "cold_start": false,
+  "n_pde": 20000,
+  "points": [
+   [
+    0.5,
+    1.753906
+   ],
+   [
+    1.0,
+    1.621094
+   ]
+  ],
+  "min": 1.621094,
+  "max": 1.753906,
+  "rel_spread": 0.07870340740740736,
+  "dirs": [
+   "runs\\ssr_ghb_n20000",
+   "runs\\ssr_ghb_n20000_wscaled"
+  ]
+ },
+ {
+  "criterion": "GHB",
+  "cold_start": false,
+  "n_pde": 5000,
+  "points": [
+   [
+    1.0,
+    1.4882815
+   ],
+   [
+    2.0,
+    1.4882815
+   ]
+  ],
+  "min": 1.4882815,
+  "max": 1.4882815,
+  "rel_spread": 0.0,
+  "dirs": [
+   "runs\\ssr_ghb_n5000",
+   "runs\\ssr_ghb_n5000_wscaled"
+  ]
+ },
+ {
+  "criterion": "GHB",
+  "cold_start": false,
+  "n_pde": 10000,
   "points": [
    [
     0.3,
@@ -44,6 +110,7 @@ Runs marked `validation_only` used a D-5.6 validation baseline and must not be r
  {
   "criterion": "MC",
   "cold_start": false,
+  "n_pde": 10000,
   "points": [
    [
     0.3,
@@ -73,29 +140,127 @@ Runs marked `validation_only` used a D-5.6 validation baseline and must not be r
 ## cold_start
 
 ```
-[]
+[
+ {
+  "criterion": "GHB",
+  "w_yield": 1.0,
+  "warm": 1.4882815,
+  "cold": 1.722656,
+  "diff": 0.23437449999999993
+ }
+]
 ```
 
 ## tornado
 
 ```
-[]
+[
+ {
+  "criterion": "GHB",
+  "w_yield": 1.0,
+  "base": 1.4882815,
+  "bars": [
+   {
+    "factor": "Mk_d_GSI",
+    "low": 3.2148440000000003,
+    "high": 2.0507815000000003,
+    "low_pct": 116.01047920033947,
+    "high_pct": 37.79526924173956,
+    "span": 1.1640625
+   },
+   {
+    "factor": "Mk_d_K_s",
+    "low": 1.496094,
+    "high": 1.6132815,
+    "low_pct": 0.5249342950241604,
+    "high_pct": 8.398948720386567,
+    "span": 0.1171875
+   }
+  ]
+ }
+]
 ```
 
 ## coupling
 
 ```
-[]
+[
+ {
+  "criterion": "GHB",
+  "w_yield": 1.0,
+  "fos": {
+   "all": 1.4804685,
+   "off": 1.496094,
+   "default": 1.4882815
+  },
+  "one_way_overestimate_pct": 0.5249342950241604
+ }
+]
 ```
 
 ## replicates
 
 ```
-[]
+[
+ {
+  "criterion": "GHB",
+  "n": 5,
+  "mean": 1.6054687,
+  "sd": 0.13142651820532641,
+  "members": [
+   "('runs\\\\ansatz_epsuv1e-2\\\\ckpt_final.pt', 11)",
+   "('runs\\\\ansatz_epsuv1e-2\\\\ckpt_final.pt', 12)",
+   "('runs\\\\ansatz_epsuv1e-2\\\\ckpt_final.pt', 13)",
+   "('runs\\\\ansatz_epsuv1e-2\\\\ckpt_final.pt', 14)",
+   "('runs\\\\ansatz_epsuv1e-2\\\\ckpt_final.pt', 7)"
+  ]
+ },
+ {
+  "criterion": "GHB",
+  "n": 3,
+  "mean": 1.4440106666666666,
+  "sd": 0.018042195912175804,
+  "members": [
+   "('runs\\\\ansatz_epsuv1e-2\\\\ckpt_final.pt', 11)",
+   "('runs\\\\ansatz_epsuv1e-2\\\\ckpt_final.pt', 12)",
+   "('runs\\\\ansatz_epsuv1e-2\\\\ckpt_final.pt', 13)"
+  ]
+ }
+]
 ```
 
 ## n_pde
 
 ```
-[]
+[
+ {
+  "criterion": "GHB",
+  "n_pde": [
+   5000,
+   10000,
+   20000
+  ],
+  "w_yield": [
+   2.0,
+   1.0,
+   0.5
+  ],
+  "w_eff": 1.0,
+  "fos": [
+   1.4882815,
+   1.4882815,
+   1.753906
+  ],
+  "dirs": [
+   "runs\\ssr_ghb_n5000_wscaled",
+   "runs\\ssr_ghb_w1",
+   "runs\\ssr_ghb_n20000_wscaled"
+  ],
+  "rel_changes": [
+   0.0,
+   0.17847732435026567
+  ],
+  "last_change_within_1pct": false
+ }
+]
 ```

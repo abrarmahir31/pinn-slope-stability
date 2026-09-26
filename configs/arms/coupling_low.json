@@ -1,0 +1,8 @@
+{
+ "factor": "coupling",
+ "level": "low",
+ "label": "KC off (one-way)",
+ "overrides": {
+  "kc": "off"
+ }
+}

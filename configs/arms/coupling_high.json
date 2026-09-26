@@ -1,0 +1,8 @@
+{
+ "factor": "coupling",
+ "level": "high",
+ "label": "KC everywhere",
+ "overrides": {
+  "kc": "all"
+ }
+}
