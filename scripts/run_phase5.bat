@@ -34,7 +34,8 @@ REM calibrated, not predicted, and every report of it must say so.
 set ADM_MODE=floor
 set ADM_FLOOR=0.50
 set PLATEAU_FACTOR=5
-set DISP_FACTOR=5
+REM D-5.18 (27 Sep): displacement condition dropped; 0 disables it (|u| > 0 always)
+set DISP_FACTOR=0
 set FIG9_T=30
 REM
 REM ===== STILL OPEN - see DECISIONS.md "Still open after Day 41" =====

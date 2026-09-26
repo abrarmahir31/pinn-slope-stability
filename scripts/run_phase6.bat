@@ -17,7 +17,9 @@ REM D-5.13 calibrated criterion - must match run_phase5.bat exactly
 set ADM_MODE=floor
 set ADM_FLOOR=0.50
 set PLATEAU_FACTOR=5
-set DISP_FACTOR=5
+REM D-5.18 (27 Sep): displacement condition dropped; 0 disables it (|u| > 0 always)
+REM D-5.19: physics arms need the BASELINE loss reference -- see DECISIONS.md
+set DISP_FACTOR=0
 set SIG3_LO=0
 set SIG3_HI=179000
 REM D-5.8: w_yield 1.0, conditional on the Phase 5 plateau holding

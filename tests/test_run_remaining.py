@@ -173,3 +173,65 @@ def test_without_nvidia_smi_a_fresh_sweep_log_counts_as_busy(tmp_path, monkeypat
     open("runs/ssr_ghb_n20000_wscaled/sweep.jsonl", "w").write("{}\n")
     assert R.recently_written(["runs/ssr_ghb_n20000_wscaled/sweep.jsonl"], 90)
     assert not R.recently_written(["runs/nothing/sweep.jsonl"], 90)
+
+
+# --- final_results -------------------------------------------------------------
+
+from scripts import final_results as FR
+
+
+def _write(d, name, res, recs):
+    json.dump(res, open(os.path.join(d, name + "_result.json"), "w"))
+    with open(os.path.join(d, name + "_sweep.jsonl"), "w") as f:
+        for r in recs:
+            f.write(json.dumps(r) + "\n")
+
+
+def _r(srf, total, adm, disp=1e-6):
+    return {"srf": srf, "total": total, "admissible": adm, "disp": disp,
+            "finite": True}
+
+
+def test_final_results_applies_d518_and_d519(tmp_path):
+    d = str(tmp_path)
+    base = [_r(1.0, 0.2, 0.74), _r(1.25, 0.6, 0.59), _r(1.5, 1.05, 0.48),
+            _r(1.375, 0.8, 0.55), _r(1.4375, 0.95, 0.51), _r(1.46875, 0.99, 0.505),
+            _r(1.484375, 1.01, 0.49)]
+    _write(d, "ssr_ghb_w1", {"fos": 1.49, "bracket": [1.46875, 1.484375],
+                             "w_yield": 1.0, "n_pde": 10000}, base)
+    # A weak arm: its own L(SRF 1) is 1.0, so its own threshold would be 5.0.
+    weak = [_r(1.0, 1.0, 0.46), _r(1.25, 1.7, 0.34), _r(3.25, 5.2, 0.08),
+            _r(3.0, 4.7, 0.09)]
+    _write(d, "ssr_arm_x_low", {"fos": 3.1, "bracket": [3.0, 3.25],
+                                "arm": {"label": "x low"}, "w_yield": 1.0,
+                                "n_pde": 10000}, weak)
+    # A draw decided by displacement: loss+floor fire at 1.5 already.
+    draw = [_r(1.0, 0.2, 0.74, 1e-6), _r(1.25, 0.6, 0.56, 2e-6),
+            _r(1.5, 1.12, 0.45, 1e-6), _r(1.75, 1.7, 0.37, 2e-5)]
+    _write(d, "ssr_ghb_draw11", {"fos": 1.7, "bracket": [1.5, 1.75],
+                                 "w_yield": 1.0, "n_pde": 10000,
+                                 "sampling_seed": 11}, draw)
+    _write(d, "ssr_ghb_draw11_lossfloor", {"fos": 1.434, "bracket": [1.43, 1.438]},
+           draw)
+    tab = FR.adopted(FR.load(d))
+    assert abs(tab["ssr_ghb_w1"]["value"] - 0.5 * (1.46875 + 1.484375)) < 1e-9
+    # D-5.19: baseline threshold 1.0 fires at 1.25, not at the arm's own 5.0
+    assert tab["ssr_arm_x_low"]["reference_rule"].startswith("baseline")
+    assert tab["ssr_arm_x_low"]["value"] is None          # [1.0, 1.25]: unresolved
+    assert tab["ssr_arm_x_low"]["bracket"] == [1.0, 1.25]
+    # a rerun under the adopted criterion wins over the as-run sweep
+    assert tab["ssr_ghb_draw11"]["value"] == 1.434
+    assert tab["ssr_ghb_draw11"]["source"] == "ssr_ghb_draw11_lossfloor"
+
+
+def test_final_results_main_writes_both_files(tmp_path):
+    d = str(tmp_path)
+    recs = [_r(1.0, 0.2, 0.74), _r(1.25, 1.05, 0.48), _r(1.125, 0.9, 0.52),
+            _r(1.1875, 1.02, 0.49), _r(1.15625, 0.95, 0.51), _r(1.171875, 1.01, 0.495),
+            _r(1.1640625, 0.99, 0.505)]
+    _write(d, "ssr_ghb_w1", {"fos": 1.168, "w_yield": 1.0, "n_pde": 10000,
+                             "sampling_seed": 7}, recs)
+    assert FR.main(["--results", d]) == 0
+    md = open(os.path.join(d, "FINAL_RESULTS.md"), encoding="utf-8").read()
+    assert "calibrated" in md and "1.168" in md
+    assert os.path.exists(os.path.join(d, "final_results.json"))

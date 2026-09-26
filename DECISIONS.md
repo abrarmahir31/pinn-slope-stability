@@ -908,7 +908,15 @@ w_yield instead (D-5.17 consequence 2).
 Fig 9 is the gamma_max field at the first SRF state the criterion declares
 failed, at the end of the rainfall window.
 
-*Reason given.* [FILL]
+*Reason given (27 Sep).* The reported FOS is defined as the lowest SRF at
+which the criterion fires, so the failed end of the bracket is the state the
+FOS refers to: the least-admissible stratum (Mk_d) has fallen below the 0.50
+floor and the loss has passed its plateau threshold. The gamma_max field
+there shows where the criterion was triggered, following SSR practice of
+showing the mechanism at the first failed reduction step. The bracket is
+0.01 wide in SRF, so the stable-end field differs little. At this state the
+strain concentration can be compared with the location of Ulusay et al.'s
+(2014) critical Section 5 surfaces (Fig. 19d), which pass through Mk_d.
 
 *Analysis note.* Under D-5.13 "failed" means "the calibrated criterion fired",
 not an independently located failure. The surface Fig 9 shows is therefore the
@@ -1077,10 +1085,10 @@ close to submission.
 weight would show directly that the FOS agrees; worth doing only if time
 remains after Phase 6.
 
-### D-6.1 — Sensitivity arms on Mk_d; rainfall arm dropped; draws as replicates (PROPOSED 24 Sep, supervisor to ratify)
+### D-6.1 — Sensitivity arms on Mk_d; rainfall arm dropped; draws as replicates (proposed 24 Sep, RATIFIED 27 Sep, supervisor)
 
-*Status.* Proposed, and launched on 25 Sep so the GPU is not idle while it
-waits for ratification. If the supervisor chooses differently, only the arms
+*Status.* Ratified 27 Sep. Launched on 25 Sep ahead of ratification so the
+GPU was not idle. If the supervisor chooses differently, only the arms
 concerned rerun (~2.2 h each); every run's `result.json` records its overrides.
 
 *Decision.*
@@ -1115,6 +1123,83 @@ Tm arm would be an expected null.
    That is reportable.
 4. Driver: `scripts/run_remaining.py` (one command, resumes on restart);
    `run_phase6.bat` carries the same settings.
+
+### D-5.18 — The displacement condition is dropped; failure = loss plateau AND admissible floor (27 Sep, supervisor)
+
+*Decision.* From 27 Sep the SSR failure criterion is: loss > 5 x reference
+AND admissible fraction (`min_tag`) < 0.50. The displacement condition of
+D-5.13 is removed (`--disp-factor 0` disables it in `ssr_sweep.py`: |u| > 0
+always holds). Closes O-22. Plateau factor, floor and metric are unchanged, so
+the D-5.13 calibration stands: the baseline is 1.488 under both criteria.
+
+*Evidence (runs of 23-26 Sep; `docs/results/criterion_o22.md`).* The
+displacement field is micrometre-scale and set by the optimiser state, not by
+failure: some trained states keep |u| ~ 1e-6 m well after loss and
+admissibility have both failed. It made three robustness checks read wrong:
+
+| check | three conditions | loss + floor |
+|---|---|---|
+| N_PDE 5k / 10k / 20k (scaled, D-5.17) | 1.488 / 1.488 / 1.754 | 1.488 / 1.488 / 1.465 |
+| collocation draws, n = 5 | mean 1.605, SD 0.131 | mean 1.454, SD 0.023 |
+| cold vs warm start | 1.723 vs 1.488 | cold bracket 1.25-1.50 contains 1.488 |
+
+Every Phase 5 headline value (GHB and MC at w_yield 0.3 / 1 / 3) and the
+coupling and K_s x0.1 arms are unchanged: displacement decided none of them.
+O-22 was raised on 22 Sep, before this evidence existed.
+
+*Consequences.* Draws 11-13 and the 20k N_PDE run were rerun under the new
+criterion (`*_lossfloor`); the as-run results are kept as evidence. Methods
+state a two-condition criterion. `run_phase5.bat` / `run_phase6.bat` now set
+DISP_FACTOR=0; `run_remaining.py` keeps 5 because it records how the 25-26
+Sep runs were made.
+
+### D-5.19 — The loss reference is the unperturbed configuration's L(SRF 1) (27 Sep, supervisor)
+
+*Decision.* The loss threshold is 5 x L(SRF 1) of the same configuration
+WITHOUT the arm's change: the baseline run (`ssr_ghb_w1`, 0.2003) for physics
+arms (K_s, GSI, coupling); the run itself for the w_yield plateau, MC, N_PDE
+and collocation draws (where the penalty weight or sampling is the
+configuration, not a perturbation of it).
+
+*Evidence.* With each arm's own L(SRF 1) as reference, an arm whose SRF 1
+state differs from the baseline moves its own finish line:
+
+| arm | L(SRF 1) | own-reference FOS | baseline-reference FOS |
+|---|---|---|---|
+| Mk_d GSI 35 | 1.0004 (admissible 0.462, already below the floor) | 3.215 | 1.043 |
+| Mk_d K_s x10 | 0.2508 (hydraulics not re-equilibrated at SRF 1) | 1.613 | 1.480 |
+
+The own-reference result ranked the weaker rock as the safer one.
+
+*Implementation.* `ssr_sweep.py` has no native option; the two reruns set
+`--plateau-factor` = 5 x 0.2003 / L_arm(SRF 1) (3.994 and 1.0013), which
+reproduces the baseline threshold to 0.03%, with `--disp-factor 0`
+(`ssr_arm_*_common`). The other arms' as-run brackets already satisfy the
+rule (their L(SRF 1) equals the baseline's). A `--loss-reference` flag is the
+clean fix if more arms are ever run.
+
+### Phase 6 results (27 Sep) — record, not a decision
+
+Criterion D-5.18 + D-5.19. `scripts/final_results.py` writes
+`docs/results/FINAL_RESULTS.md` and `final_results.json` from the committed
+result files. All FOS are calibrated (D-5.13); only relative results are
+predictive.
+
+- Replicates (collocation draws, seeds 7, 11-14): 1.488, 1.434, 1.465,
+  1.434, 1.449; mean 1.454, SD 0.023 (CV 1.6%). The calibration seed is the
+  highest of the five. Single-run resolution 0.023; a difference between two
+  runs has SD ~0.033.
+- N_PDE 5k / 10k / 20k at matched effective w_yield: 1.488 / 1.488 / 1.465;
+  the largest change is 1.0 replicate SD.
+- Sensitivity (seed 7): Mk_d GSI 35 / 55 -> 1.043 (-29.9%) / 2.051 (+37.8%);
+  Mk_d K_s x0.1 / x10 -> 1.496 / 1.480. GSI swing 1.008 vs K_s 0.016.
+- Coupling: KC off / marls (default) / everywhere -> 1.496 / 1.488 / 1.480.
+  No measurable effect (consistent with O-21). The plan's "one-way
+  overestimates by ~21.5%" is not supported and must not appear.
+- MC vs GHB: +0.023 / +0.039 / +0.062 at w_yield 0.3 / 1 / 3; consistent sign
+  but +0.039 vs a difference-SD of ~0.033 at the reported weight: not
+  resolvable by FOS. The criteria differ in admissibility (MC yields more of
+  Mk_d).
 
 ## Open issues register (Day 42)
 
@@ -1161,7 +1246,8 @@ evaluations to reach SRF 2.0 (~6 h per sweep); the probe used 0.25 (~10
 evaluations with bisection, ~2.7 h). Larger warm-start jumps are what
 `run_phase5.bat cold` measures. Choose the step for production sweeps.
 
-**O-22 ◐ Drop the displacement condition?** (22 Sep, supervisor decision.)
+**O-22 ✅ CLOSED by D-5.18 (dropped, 27 Sep).** Original entry: Drop the
+displacement condition? (22 Sep, supervisor decision.)
 It has never decided an adequately trained run, but it decided the
 under-trained cold run (D-5.13 note 4 amendment, D-5.16). Options: drop it,
 making the criterion formally two-condition (the six Phase 5 results are
@@ -1203,12 +1289,20 @@ reading the v2 numbers, not after.
 `failed` or `stable`. Distinct from t = 30 d
 (D-5.8). Blocks `run_phase5.bat figs`.
 
-**O-5 ◐ Fig 10 layout.** The workbook defines Fig 10 as FOS bars (LEM /
+**O-5 ✅ CLOSED (27 Sep, supervisor): Fig 10 = two panels, (a) GHB vs MC at
+w_yield 1, hatched and labelled "calibrated (D-5.13)", with the replicate SD
+as error bars; (b) FOS vs w_yield (absorbs Fig S1). No LEM bar.** Original
+entry: Fig 10 layout. The workbook defines Fig 10 as FOS bars (LEM /
 MC / GHB); D-5.1 makes the FOS-vs-`w_yield` plateau compulsory. Implemented
 both: `fig10` = bars with plateau range as error bars, `figS1` = plateau.
 Decide: plateau as a Fig 10 panel, supplementary, or renumber.
 
-**O-15 ◐ LEM comparison framing.** Ulusay's F = 0.94 uses residual bedding
+**O-15 ✅ CLOSED (27 Sep, supervisor): the LEM F = 0.94 is discussed in the
+text as the bedding-controlled mechanism a continuum without bedding planes
+cannot represent; Ulusay's rock-mass circular analysis (Fig. 17b, not
+critical at 30 deg) is the comparable class. No numerical comparison is
+claimed, since the PINN FOS is calibrated.** Original entry: LEM comparison
+framing. Ulusay's F = 0.94 uses residual bedding
 strength in limit equilibrium; the PINN uses rock-mass GHB (and rock-mass MC
 under D-5.2 a). The baseline-v1 probe declared no failure to SRF 2.0. Decide how
 Results and Discussion present a PINN FOS that may sit well above 0.94, before
@@ -1229,22 +1323,26 @@ credits tensile points with the rock-mass UCS; 147 Mk_d points within 3 m of
 the ground lie beyond the GHB tensile cutoff yet read FS >= 1 (Day 40). Keep
 and report, or change the FS definition.
 
-**O-11 ◐ GSI arm and sigma_0.** The GSI arm moves E; sigma_0 is not
+**O-11 ✅ CLOSED (27 Sep, supervisor): stated as a limitation, not re-solved.
+GSI 35 is 54% inadmissible in Mk_d at SRF 1 from strength alone, and the GSI
+swing (1.008) is ~60x the K_s swing, far beyond any plausible sigma_0 effect.
+Re-solving sigma_0 per arm is future work.** Original entry: GSI arm and
+sigma_0. The GSI arm moves E; sigma_0 is not
 re-equilibrated (`sigma0_consistent: false`). Re-solve sigma_0 per arm
 (`17_sigma0_solve.py`) or state as a limitation.
 
 ### Phase 6 scope
 
-**O-9 ◐ PROPOSED by D-6.1 (Mk_d / Mk_d), awaiting supervisor.** Original entry:
+**O-9 ✅ CLOSED by D-6.1 (ratified 27 Sep; Mk_d / Mk_d).** Original entry:
 `KS_STRATUM` and `GSI_STRATUM`. Replace the plan's coal-seam K_s
 arm (no coal in Section 5). Blocks `run_phase6.bat arms`.
 
-**O-10 ◐ PROPOSED by D-6.1 (drop; the Mk_d K_s arm replaces it).** Original
+**O-10 ✅ CLOSED by D-6.1 (ratified 27 Sep; dropped, the Mk_d K_s arm replaces it).** Original
 entry: Rainfall arm. 10/20/40 mm/hr give bit-identical boundary conditions
 under `INFILTRATION_MODE = "capacity_limited"` (test-pinned). Drop the arm, or
 change the infiltration mode (a model change).
 
-**O-12 ◐ PROPOSED by D-6.1 (draws, seeds 11-14).** Original entry:
+**O-12 ✅ CLOSED by D-6.1 (ratified 27 Sep; draws, seeds 11-14).** Original entry:
 Replicates. `--sampling-seed` varies collocation draws only; true
 network-seed replicates need one production baseline per seed (~18 h each).
 

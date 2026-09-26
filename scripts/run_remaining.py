@@ -1,5 +1,11 @@
 r"""Every remaining GPU run, unattended, then the result data. ONE COMMAND.
 
+HISTORICAL (27 Sep): this driver made the runs of 25-26 Sep with the D-5.13
+three-condition criterion and each run's own loss reference. D-5.18 dropped
+the displacement condition and D-5.19 fixed the reference for physics arms;
+the reportable numbers come from scripts/final_results.py. COMMON is left as
+it was so the record of how those runs were made stays true.
+
     scripts\run_remaining.bat                 (Miniforge Prompt, env active)
     python scripts/run_remaining.py --dry-run  print the plan, run nothing
 
