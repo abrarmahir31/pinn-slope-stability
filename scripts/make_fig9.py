@@ -151,7 +151,7 @@ def _crest_inset(ax, X, Z, LG, U, V, xr, zr, norm):
     k = m & sub
     mag = np.hypot(U[k], V[k])
     ok = mag > 0
-    if ok.any():
+    if ok.any():   # nothing drawn for --inset-arrows none (all nan)
         ins.quiver(X[k][ok], Z[k][ok], (U[k] / mag)[ok], (V[k] / mag)[ok],
                    angles="xy", pivot="mid", color="white", edgecolor=ps.INK,
                    linewidth=0.4, scale=16, width=0.011, headwidth=3.5,
@@ -178,7 +178,20 @@ def main(argv=None):
     ap.add_argument("--nz", type=int, default=200)
     ap.add_argument("--min-frac", type=float, default=0.25)
     ap.add_argument("--out", default="docs/figs/fig9.png")
+    ap.add_argument("--mask-f1-m", type=float, default=0.0,
+                    help="exclude points within this horizontal distance (m) of "
+                         "the F1 far-field boundary from the ridge, LI and band "
+                         "width. The ground/F1 corner (traction-free surface "
+                         "meeting a roller) is a strain singularity; 0 keeps "
+                         "the original statistics. A REPORTING CHOICE: state it.")
+    ap.add_argument("--inset-arrows", choices=("total", "increment", "none"),
+                    default="total",
+                    help="crest-inset arrows: total displacement direction, the "
+                         "increment since the sweep's SRF-start state, or none. "
+                         "|d| is micrometre-scale (D-5.13 note 4, D-5.18).")
     a = ap.parse_args(argv)
+    if a.mask_f1_m < 0:
+        ap.error("--mask-f1-m must be >= 0")
 
     ps.apply()
     n = len(a.run)
@@ -188,19 +201,35 @@ def main(argv=None):
         net, d = _load_net(p)
         X, Z, G, inside, U, V = gamma_grid(net, a.t, a.nx, a.nz, with_uv=True)
         net0, _ = _load_net(start_state_path(run))
-        _, _, G0, _ = gamma_grid(net0, a.t, a.nx, a.nz)
-        li0 = fsurf.localisation_intensity(G0, inside)
+        _, _, G0, _, U0, V0 = gamma_grid(net0, a.t, a.nx, a.nz, with_uv=True)
+        if a.inset_arrows == "increment":
+            U, V = U - U0, V - V0
+        elif a.inset_arrows == "none":
+            U, V = np.full_like(U, np.nan), np.full_like(V, np.nan)
+        # Statistics region: the domain, optionally minus a strip along F1.
+        stat = inside & (X <= g.x_f1(Z) - a.mask_f1_m)
+        li0 = fsurf.localisation_intensity(G0, stat)
         if not np.isfinite(G).any() or np.nanmax(G) <= 0:
             raise ValueError(f"{run}: gamma_max is empty or zero -- not plotting "
                              f"a blank field")
-        xr, zr = fsurf.extract_ridge(X, Z, G, mask=inside, min_frac=a.min_frac)
+        xr, zr = fsurf.extract_ridge(X, Z, G, mask=stat, min_frac=a.min_frac)
         crit = d.get("sweep", {}).get("criterion", os.path.basename(run))
         rec = {"run": run, "criterion": crit, "state": a.state, "srf": srf,
-               "localisation_intensity": fsurf.localisation_intensity(G, inside),
+               "localisation_intensity": fsurf.localisation_intensity(G, stat),
                "localisation_intensity_srf_start": li0,
-               "band_width_m": fsurf.band_width(X, Z, G, mask=inside),
-               "grid": [a.nx, a.nz], "ridge_x": xr.tolist(), "ridge_z": zr.tolist()}
+               "band_width_m": fsurf.band_width(X, Z, G, mask=stat),
+               "grid": [a.nx, a.nz], "ridge_x": xr.tolist(), "ridge_z": zr.tolist(),
+               "mask_f1_m": a.mask_f1_m, "inset_arrows": a.inset_arrows}
         rec["li_ratio_vs_start"] = rec["localisation_intensity"] / li0
+        # Where the ridge sits relative to F1: a ridge hugging the ground/F1
+        # corner is the boundary singularity, not a slip surface.
+        d_f1 = (g.x_f1(zr) - xr) if xr.size else np.array([np.nan])
+        rec["ridge_max_dist_to_f1_m"] = float(np.nanmax(d_f1))
+        if xr.size and rec["ridge_max_dist_to_f1_m"] < 25.0:
+            print(f"  WARNING: every ridge point is within "
+                  f"{rec['ridge_max_dist_to_f1_m']:.1f} m of the F1 boundary -- "
+                  f"the ridge is the ground/F1 corner, not a slip surface. "
+                  f"Try --mask-f1-m 20.")
         summary.append(rec)
         fields.append((X, Z, G, U, V, xr, zr, crit, srf, rec))
         print(f"{run}: SRF {srf:.3f}  ridge points {xr.size}  "
@@ -235,6 +264,11 @@ def main(argv=None):
         ax.text(0.015, 0.975, f"({'abcdefgh'[i]})  {crit}, SRF {srf:.3f} "
                 f"({a.state}); LI/LI$_0$ = {rec['li_ratio_vs_start']:.0f}",
                 transform=ax.transAxes, ha="left", va="top", zorder=20)
+        if a.mask_f1_m > 0:
+            zz = np.linspace(z0, z1, 50)
+            ax.fill_betweenx(zz, g.x_f1(zz) - a.mask_f1_m, g.x_f1(zz),
+                             facecolor="none", edgecolor="white", hatch="//",
+                             lw=0.0, zorder=7)
         _crest_inset(ax, X, Z, LG, U, V, xr, zr, norm)
     axes[-1].set_xlabel("$x$ (m)")
     ps.colorbar(fig, im, axes.tolist(), r"$\log_{10}\gamma_{\max}$",

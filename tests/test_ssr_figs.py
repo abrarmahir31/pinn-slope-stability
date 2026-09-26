@@ -132,3 +132,15 @@ def test_fig10_bars_need_the_reported_w_yield(tmp_path):
     with pytest.raises(F.NoData):
         F.fig10(rows, str(tmp_path / "f.png"), w_report=1.0)
     assert F.fig10(rows, str(tmp_path / "f.png"), w_report=0.3) == 1
+
+
+def test_fig9_f1_mask_keeps_the_ridge_away_from_the_far_field_corner(tiny_state, tmp_path):
+    from src.step21_geometry import geometry as g
+    import numpy as np
+    F9.main(["--run", tiny_state, "--state", "failed", "--nx", "40",
+             "--nz", "30", "--mask-f1-m", "20", "--inset-arrows", "none",
+             "--out", str(tmp_path / "f.png")])
+    s = json.load(open(tmp_path / "f.json"))[0]
+    assert s["mask_f1_m"] == 20 and s["inset_arrows"] == "none"
+    x, z = np.array(s["ridge_x"]), np.array(s["ridge_z"])
+    assert x.size and np.all(g.x_f1(z) - x >= 20 - 1e-9)
